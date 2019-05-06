@@ -1,0 +1,4 @@
+[submodule "ProbeParticleModel"]
+	path = ProbeParticleModel
+	url = https://github.com/ProkopHapala/ProbeParticleModel.git
+	branch = complex_tip
