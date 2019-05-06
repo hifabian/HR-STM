@@ -75,8 +75,10 @@ class WavefunctionCPP(wavefunction_abc.WavefunctionAbstract):
     clib.computeWFN.argtypes = [ \
       # workfunction, rCut, pbc, abc
       ctypes.c_double, ctypes.c_double, array1b, array1d, \
-      # coeffsObject, atoms, grid, wfnObject
-      ctypes.py_object, ctypes.py_object, ctypes.py_object, ctypes.py_object]
+      # coeffsObject, eigsObject, atoms, grid
+      ctypes.py_object, ctypes.py_object, ctypes.py_object, ctypes.py_object, \
+      # wfnObject
+      ctypes.py_object]
 
     # Total number of grid points
     noPoints = np.prod(self.dimGrid)
@@ -92,7 +94,8 @@ class WavefunctionCPP(wavefunction_abc.WavefunctionAbstract):
       for spinIdx in range(self.noSpins):
         clib.computeWFN(self._workfunction, \
           self.rcut, self.pbc, self.abc, \
-          self._coefficients[spinIdx], self._atoms.get_positions(), \
+          self._coefficients[spinIdx], self._eigs[spinIdx], \
+          self._atoms.get_positions(), \
           self._grids[gridIdx], self._wfn[gridIdx][spinIdx])
     end = time.time()
     print("Wavefunction took {} seconds".format(end-start))

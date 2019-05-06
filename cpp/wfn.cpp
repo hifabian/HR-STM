@@ -31,11 +31,11 @@ extern "C" {
                    const bool *pbc,
                    const double *abc, 
                    PyArrayObject *coeffsObject,
+                   PyArrayObject *eigsObject,
                    PyArrayObject *atoms,
                    PyArrayObject *grid,
                    PyArrayObject *wfnObject ) {
     // Decay
-    const double kappa = std::sqrt(2.0*EV2HARTREE*wn);
     // Extra information from containers
     const std::size_t noDer = PyArray_DIMS(wfnObject)[1];
     const std::size_t noCoeffs = PyArray_DIMS(coeffsObject)[2];
@@ -47,13 +47,14 @@ extern "C" {
     const Atoms A((const Vector3d*) PyArray_DATA(atoms), noAtoms, rCut, pbc, 
       *(const Vector3d*) abc);
     const double *coeffs = (const double *) PyArray_DATA(coeffsObject);
+    const double *eigs = (const double *) PyArray_DATA(eigsObject);
     double *wfn = (double *) PyArray_DATA(wfnObject);
 
     // Loop over grid points and compute wavefunctions
     #pragma omp parallel for
     for( std::size_t pointIdx = 0; pointIdx < noPoints; ++pointIdx ) {
-      const std::vector<double> tmp = atomLoop( kappa, R[pointIdx], noAtoms, 
-        noCoeffs, noEigs, noDer, A, coeffs );
+      const std::vector<double> tmp = atomLoop( wn, R[pointIdx], noAtoms, 
+        noCoeffs, noEigs, noDer, A, coeffs, eigs );
       for( std::size_t derIdx = 0; derIdx < noDer; ++derIdx )
         for( std::size_t eigIdx = 0; eigIdx < noEigs; ++eigIdx )
           wfn[eigIdx*noDer*noPoints+derIdx*noPoints+pointIdx] += 

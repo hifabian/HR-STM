@@ -31,54 +31,54 @@
  *
  *  @return A vector with wavefunctions values.
  */
-inline std::vector<double> atomLoop( const double kappa,
+inline std::vector<double> atomLoop( const double wn,
                                      const Vector3d &r,
                                      const std::size_t noAtoms,
                                      const std::size_t noCoeffs,
                                      const std::size_t noEigs,
                                      const std::size_t noDer,
                                      const Atoms &A,
-                                     const double *coeffs ) {
+                                     const double *coeffs,
+                                     const double *eigs ) {
   // Result
   std::vector<double> res(noDer*noEigs, 0.0);
   double *resData = res.data();
 
   const std::size_t noTotCoeffs = noCoeffs*noEigs;
-  const auto func = [&noDer, &noCoeffs, &kappa, &noEigs, &coeffs, &noTotCoeffs, &resData] (Vector3d dr, std::size_t idx) {
+  const auto func = [&noDer, &noCoeffs, &wn, &noEigs, &coeffs, &eigs, &noTotCoeffs, &resData] (Vector3d dr, std::size_t idx) {
     dr *= ANG2BOHR;
     const double nr = dr.norm();
-    const double radial = std::exp(-nr*kappa);
     const double nr_inv = 1. / nr;
     const double* coeffsPointer = coeffs+(noTotCoeffs*idx);
     /* s-tip, s-sample */
     if( noCoeffs == 1 && noDer == 1 )
-      ss(kappa, noEigs, coeffsPointer, nr_inv, dr, radial, resData);
+      ss(wn, noEigs, coeffsPointer, eigs, nr_inv, nr, dr, resData);
     /* s-tip, p-sample */
     else if( noDer == 1 && noCoeffs == 4 )
-      ssp(kappa, noEigs, coeffsPointer, nr_inv, dr, radial, resData);
+      ssp(wn, noEigs, coeffsPointer, eigs, nr_inv, nr, dr, resData);
     /* s-tip, d-sample */
     else if( noDer == 1 && noCoeffs == 9 )
-      sspd(kappa, noEigs, coeffsPointer, nr_inv, dr, radial, resData);
+      sspd(wn, noEigs, coeffsPointer, eigs, nr_inv, nr, dr, resData);
     /* p-tip, s-sample */
     else if( noDer == 4 && noCoeffs == 1 ) {
-      ss(kappa, noEigs, coeffsPointer, nr_inv, dr, radial, resData);
-      pys(kappa, noEigs, coeffsPointer, nr_inv, dr, radial, resData+noEigs);
-      pzs(kappa, noEigs, coeffsPointer, nr_inv, dr, radial, resData+noEigs*2);
-      pxs(kappa, noEigs, coeffsPointer, nr_inv, dr, radial, resData+noEigs*3);
+      ss(wn, noEigs, coeffsPointer, eigs, nr_inv, nr, dr, resData);
+      pys(wn, noEigs, coeffsPointer, eigs, nr_inv, nr, dr, resData+noEigs);
+      pzs(wn, noEigs, coeffsPointer, eigs, nr_inv, nr, dr, resData+noEigs*2);
+      pxs(wn, noEigs, coeffsPointer, eigs, nr_inv, nr, dr, resData+noEigs*3);
     }
     /* p-tip, p-sample */
     else if( noDer == 4 && noCoeffs == 4 ) {
-      ssp(kappa, noEigs, coeffsPointer, nr_inv, dr, radial, resData);
-      pysp(kappa, noEigs, coeffsPointer, nr_inv, dr, radial, resData+noEigs);
-      pzsp(kappa, noEigs, coeffsPointer, nr_inv, dr, radial, resData+noEigs*2);
-      pxsp(kappa, noEigs, coeffsPointer, nr_inv, dr, radial, resData+noEigs*3);
+      ssp(wn, noEigs, coeffsPointer, eigs, nr_inv, nr, dr, resData);
+      pysp(wn, noEigs, coeffsPointer, eigs, nr_inv, nr, dr, resData+noEigs);
+      pzsp(wn, noEigs, coeffsPointer, eigs, nr_inv, nr, dr, resData+noEigs*2);
+      pxsp(wn, noEigs, coeffsPointer, eigs, nr_inv, nr, dr, resData+noEigs*3);
     }
     /* p-tip, d-sample */
     else if( noDer == 4 && noCoeffs == 9 ) {
-      sspd(kappa, noEigs, coeffsPointer, nr_inv, dr, radial, resData);
-      pyspd(kappa, noEigs, coeffsPointer, nr_inv, dr, radial, resData+noEigs);
-      pzspd(kappa, noEigs, coeffsPointer, nr_inv, dr, radial, resData+noEigs*2);
-      pxspd(kappa, noEigs, coeffsPointer, nr_inv, dr, radial, resData+noEigs*3);
+      sspd(wn, noEigs, coeffsPointer, eigs, nr_inv, nr, dr, resData);
+      pyspd(wn, noEigs, coeffsPointer, eigs, nr_inv, nr, dr, resData+noEigs);
+      pzspd(wn, noEigs, coeffsPointer, eigs, nr_inv, nr, dr, resData+noEigs*2);
+      pxspd(wn, noEigs, coeffsPointer, eigs, nr_inv, nr, dr, resData+noEigs*3);
     }
     else {
       throw std::invalid_argument("Tip-Sample combination is not supported.\n");

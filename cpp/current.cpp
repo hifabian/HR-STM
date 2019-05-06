@@ -83,8 +83,6 @@ extern "C" {
                        PyObject *eigsTip,   PyObject *eigsSam,
                        PyObject *grids,     PyArrayObject *atoms,
                        PyArrayObject *current ) { 
-    // Decay
-    const double kappa = std::sqrt(2.0*EV2HARTREE*wn);
     // Extra information from containers
     const std::size_t noDer = PyArray_DIMS((PyArrayObject*) PyList_GET_ITEM(PyList_GET_ITEM(coeffsTip,0),0))[1];
     const std::size_t noCoeffs = PyArray_DIMS((PyArrayObject*) PyList_GET_ITEM(coeffsSam,0))[2];
@@ -165,8 +163,9 @@ extern "C" {
           PyArrayObject *coeffsSamObject = (PyArrayObject*) PyList_GET_ITEM(coeffsSam,spinSamIdx);
           const std::size_t noEigsSam = PyArray_DIMS(eigsSamObject)[0];
           // Wavefunctions and its derivatives for all eigenvalues on sample
-          const auto wfn = atomLoop( kappa, curGrid, noAtoms, noCoeffs, noEigsSam, noDer, A, 
-            (const double*) PyArray_DATA(coeffsSamObject) );
+          const auto wfn = atomLoop( wn, curGrid, noAtoms, noCoeffs, noEigsSam, noDer, A, 
+            (const double*) PyArray_DATA(coeffsSamObject),
+            (const double*) PyArray_DATA(eigsSamObject));
 
           for( std::size_t eigSamIdx = 0; eigSamIdx < noEigsSam; ++eigSamIdx ) {
             const double eigSam = *(const double*) PyArray_GETPTR1(eigsSamObject,eigSamIdx);
