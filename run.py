@@ -430,11 +430,11 @@ if rank == 0:
     while idx < len(args.pdos_list):
       try:
         chenSingle, eigsTip = constCoeffs(minETip, maxETip, 
-          de=float(args.pdos_list[idx+4]), \
           s=float(args.pdos_list[idx]), \
           py=float(args.pdos_list[idx+1]), \
           pz=float(args.pdos_list[idx+2]), \
-          px=float(args.pdos_list[idx+3]))
+          px=float(args.pdos_list[idx+3]), \
+          de=float(args.pdos_list[idx+4]))
         idx += 5
       except ValueError:
         chenSingle, eigsTip = read_PDOS(args.pdos_list[idx], minETip, maxETip)
@@ -548,7 +548,8 @@ stm.run(args.voltages)
 end = time.time()
 print("Evaluating STM-run method in {} seconds.".format(end-start))
 
-stm.write(args.output+".npy")
+#stm.write(args.output+".npy")
+stm.write_compressed(args.output)
 
 print("Maximum memory usage was {} kilobytes.".format( \
   resource.getrusage(resource.RUSAGE_SELF).ru_maxrss))
