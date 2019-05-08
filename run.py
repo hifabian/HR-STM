@@ -548,7 +548,8 @@ stm.run(args.voltages)
 end = time.time()
 print("Evaluating STM-run method in {} seconds.".format(end-start))
 
-stm.write(args.output+".npy")
+#stm.write(args.output+".npy")
+stm.write_compressed(args.output)
 
 print("Maximum memory usage was {} kilobytes.".format( \
   resource.getrusage(resource.RUSAGE_SELF).ru_maxrss))

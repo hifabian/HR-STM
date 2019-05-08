@@ -243,7 +243,7 @@ class STM():
 
   def write(self, filename):
     """!
-      @brief Writes the current to a file.
+      @brief Writes the current to a file (*.npy).
 
       The file is written as a 1-dimensional array. The reconstruction has
       thus be done by hand. It can be reshaped into a 4-dimensional array in
@@ -255,6 +255,36 @@ class STM():
     fh = MPI.File.Open(self.comm, filename, amode)
     fh.Write_at_all(self.offsets[self.rank], self.localCurrent)
     fh.Close()
+
+  def write_compressed(self, filename, tol=1e-5):
+    """!
+      @brief Writes the current compressed to a file (*.npz).
+
+      The file is written as a 1-dimensional array similar to write().
+      Furthermore, in order to load the current use np.load()['arr_0'].
+
+      @attention This method evokes a gather!
+
+      @param filename Name of file.
+      @param tol      Relative toleranz to the maximum for a height 
+                      and voltage.
+    """
+    # Gather the current
+    current = self.gather()
+
+    if self.rank == 0:
+      noVoltages = len(self._voltages)
+      totDim = self.dimGrid+(noVoltages,)
+      # Remove unnecessary data for better compression
+      for hIdx in range(self.dimGrid[2]):
+        for vIdx in range(noVoltages):
+          maxVal = np.max(np.abs(np.reshape(current,totDim)[:,:,hIdx,vIdx]))
+          # Note that this does not copy the data!
+          tmp = np.reshape(current,totDim)[:,:,hIdx,vIdx]
+          tmp[np.abs(tmp) < tol*maxVal] = 0.0
+      # Save as 1-dimensional array to mimic write()
+      np.savez_compressed(filename, current.ravel())
+   
 
   ##############################################################################
   def run(self, voltages):
