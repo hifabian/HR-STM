@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python
 
 # @author Hillebrand, Fabian
 # @date   2018-2019
