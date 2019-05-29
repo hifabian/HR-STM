@@ -406,7 +406,7 @@ if rank == 0:
       [0.0, 0.0, args.eval_region[5]-args.eval_region[4]]])
   # Restrict grid to heights, if given
   trueHeights = []
-  if args.heights != []:
+  if args.heights:
     trueHeights, heightIds = getHeightIndices(args.heights, lVec, dim, atomsSam)
     for ids in range(len(tipPos)):
       tipPos[ids] = np.array(tipPos[ids][:,:,heightIds].copy())
