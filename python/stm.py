@@ -256,7 +256,7 @@ class STM():
     fh.Write_at_all(self.offsets[self.rank], self.localCurrent)
     fh.Close()
 
-  def write_compressed(self, filename, tol=1e-5):
+  def write_compressed(self, filename, tol=1e-3):
     """!
       @brief Writes the current compressed to a file (*.npz).
 
