@@ -32,7 +32,7 @@ private:
   //! All cell lists for atom indices.
   std::vector<list_t> cellLists;
   //! Atom positions.
-  const Vector3d *atoms;
+  std::vector<Vector3d> atoms;
   //! Number of atoms.
   const index_t noAtoms;
   //! Flags for periodic boundary conditions.
@@ -50,8 +50,10 @@ public:
 
   /*! @brief Constructor.
    *
-   *  @note The cutoff should be bigger than the box, otherwise
+   *  @note The cutoff should not be bigger than the box, otherwise
    *        some atoms may be missed.
+   *        Furthermore, the atom positions will be restricted to the
+   *        box.
    *
    *  @param atoms   C-array of atom positions.
    *  @param noAtoms Number of atoms.
@@ -61,7 +63,8 @@ public:
    */
   Atoms( const Vector3d *atoms, index_t noAtoms, double rcut, 
          const bool *pbc, const Vector3d &abc )
-    : atoms(atoms), noAtoms(noAtoms), rcut2(rcut*rcut), pbc(pbc), abc(abc),
+    : atoms(atoms,atoms+noAtoms), noAtoms(noAtoms), rcut2(rcut*rcut), 
+      pbc(pbc), abc(abc),
       cSize({std::max(static_cast<index_t>(std::floor(abc[0]/rcut)),1),
              std::max(static_cast<index_t>(std::floor(abc[1]/rcut)),1),
              std::max(static_cast<index_t>(std::floor(abc[2]/rcut)),1)}),
@@ -69,8 +72,11 @@ public:
     // Fill cell lists
     cellLists.resize(cSize[0]*cSize[1]*cSize[2]);
     for( std::size_t atomIdx = 0; atomIdx < noAtoms; ++atomIdx ) {
-      const indices_t ids = wrapIds(getIndices(atoms[atomIdx]));
-      cellLists[flatten(ids)].push_back(atomIdx);
+      const indices_t ids = getIndices(atoms[atomIdx]);
+      // Restrict atom position to abc box
+      const Vector3d shift = shiftVector(ids);
+      this->atoms[atomIdx] -= shift;
+      cellLists[flatten(wrapIds(ids))].push_back(atomIdx);
     }
   }
 
