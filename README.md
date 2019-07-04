@@ -1,3 +1,12 @@
+# About this Branch
+
+This branch is meant to allow gradual transitioning from a ghost molecule
+to a full molecule.
+For the ghost molecule the SCF calculation does not include the molecule
+(the PPM simulation is the same however).
+Note that the slab is identical in both cases (relaxed for the molecule on the
+surface).
+
 # HR-STM Simulation
 
 This repository provides an implementation of high resolution scanning tunnelling 
