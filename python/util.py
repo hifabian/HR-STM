@@ -71,3 +71,13 @@ def getHeightIndices(heights, lVec, dimGrid, atoms):
   trueHeights = heightIds*dz
 
   return trueHeights, heightIds
+
+
+def scale(coeffs, factor, iMax):
+  """!
+    @brief Scales coefficients by factor
+  """
+  for spinIdx in range(len(coeffs)):
+    coeffs[:iMax] *= coeffs[:iMax]
+  return coeffs
+

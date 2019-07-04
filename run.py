@@ -299,6 +299,21 @@ parser.add_argument('--fwhm',
   help="Full width at half maximum used for Gaussian density of states.")
 
 # ------------------------------------------------------------------------------
+
+parser.add_argument('--scaling',
+  type=float,
+  default=1.0,
+  required=False,
+  help="Scaling of the molecule coefficients.")
+
+# TODO if this is to be formalised, this should be done automatically ideally
+parser.add_argument('--mol',
+  type=int,
+  default=0,
+  required=False,
+  help="Index of last atom belonging to molecule (assumed at the start)")
+
+# ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 
 # ==============================================================================
@@ -356,10 +371,12 @@ if rank == 0:
     coeffsSam, eigsSam, _ = read_wfn(args.coeffs_s, args.emin, args.emax)
   # Basis sets (CP2K)
   elemToBasisSam = BasisSetCP2K.from_file([args.cp2k_input_s, args.basis_sets_s])
-  # Positions
+  # Positionsfs_s, args.emi
   atomsSam = read_xyz(args.xyz_s)
   # Basis sets (PPSTM set from CP2K)
+  # TODO scale molecule coefficients by factor lamdba in [0,1]
   coeffsSam = cp2kToPPSTM(elemToBasisSam, coeffsSam, atomsSam, args.orbs_sam)
+  coeffsSam = scale(coeffSam, args.scaling, args.mol)
   elemToBasisSam = BasisSetPPSTM.from_file([args.workfunction, atomsSam, \
     args.orbs_sam])
   end = time.time()
