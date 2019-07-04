@@ -374,9 +374,9 @@ if rank == 0:
   # Positionsfs_s, args.emi
   atomsSam = read_xyz(args.xyz_s)
   # Basis sets (PPSTM set from CP2K)
-  # TODO scale molecule coefficients by factor lamdba in [0,1]
   coeffsSam = cp2kToPPSTM(elemToBasisSam, coeffsSam, atomsSam, args.orbs_sam)
-  coeffsSam = scale(coeffSam, args.scaling, args.mol)
+  # Scale specified coefficients by factor in [0,1]
+  coeffsSam = scale(coeffsSam, args.scaling, args.mol)
   elemToBasisSam = BasisSetPPSTM.from_file([args.workfunction, atomsSam, \
     args.orbs_sam])
   end = time.time()
