@@ -2,10 +2,7 @@
 
 This branch is meant to allow gradual transitioning from a ghost molecule
 to a full molecule.
-For the ghost molecule the SCF calculation does not include the molecule
-(the PPM simulation is the same however).
-Note that the slab is identical in both cases (relaxed for the molecule on the
-surface).
+For simplicity, we simply allow the coefficients of the molecule to be scaled.
 
 # HR-STM Simulation
 
