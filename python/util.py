@@ -67,7 +67,7 @@ def getHeightIndices(heights, lVec, dimGrid, atoms):
   # Step size in grid
   dz = lVec[3,2] / dimGrid[2]
 
-  heightIds = np.array([int(height / dz) for height in heights])
+  heightIds = np.array([round(height / dz) for height in heights])
   trueHeights = heightIds*dz
 
   return trueHeights, heightIds
