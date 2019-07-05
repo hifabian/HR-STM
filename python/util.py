@@ -78,6 +78,6 @@ def scale(coeffs, factor, iMax):
     @brief Scales coefficients by factor
   """
   for spinIdx in range(len(coeffs)):
-    coeffs[:iMax] *= coeffs[:iMax]
+    coeffs[spinIdx][:iMax] *= factor
   return coeffs
 
