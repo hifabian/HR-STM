@@ -18,3 +18,5 @@ Q*K*/
 *.wfn*
 *.MOLog
 *.cube
+
+examples/

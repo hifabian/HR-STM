@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 
-# @author Hillebrand, Fabian
-# @date   2018-2019
+# TODO: Plan of action:
+#   Use Kristjan's wavefunction. For the derivative, derive the
+#   interpolation if possible.
+
+# @author  Hillebrand, Fabian
+# @date    2019
+# @version dev2.0.0
 
 # Purpose: Run the HR-STM code.
 
@@ -28,6 +33,7 @@ import argparse # Terminal arguments
 import sys      # System access
 import time     # Timing
 import resource # Memory usage
+import time
 
 import os
 
@@ -41,13 +47,22 @@ import sysconfig as sc
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+"/python/")
 
 # Own includes
-from util import *                        # Various methods that have no home
-from stm import *                     # STM classes
-from read_input import *                  # Read input files
-from basis.basis_set_cp2k import *        # CP2K Basis sets
-from basis.basis_set_ppstm import *       # PPSTM Basis sets
-from basis.wavefunction_cpp import *      # C++ implemented wavefunction
-from tunnelling.chen_coeffs_cpp import *  # C++ implemented derivative rule
+import atomistic_tools.cp2k_grid_orbitals as cgo
+import atomistic_tools.cp2k_stm_sts as css
+from atomistic_tools import common
+from atomistic_tools.cube import Cube
+
+from python.read_input import *
+from python.util import *
+
+from python.tunnelling.chen_coeffs_python import *
+
+# ------------------------------------------------------------------------------
+
+ang2bohr   = 1.88972612546
+ev2hartree = 0.03674930814
+
+# ------------------------------------------------------------------------------
 
 from mpi4py import MPI # MPI
 
@@ -57,6 +72,7 @@ rank = comm.Get_rank()
 
 startTotal = time.time()
 
+# ------------------------------------------------------------------------------
 
 # The proper way is to use -m mpi4py but this failed on the cluster
 def global_excepthook(etype, value, tb):
@@ -90,47 +106,32 @@ parser = argparse.ArgumentParser(description="HR-STM for CP2K based on Chen's"
 parser.add_argument('--output',
   type=str,
   metavar="OUTPUT",
-  required=True,
-  help="Name for output file stored as 'OUTPUT.npy'.")
+  default="hrstm",
+  required=False,
+  help="Name for output file.")
 
 # ------------------------------------------------------------------------------
 
-parser.add_argument('--cp2k_input_s',
+parser.add_argument('--cp2k_input',
   metavar='FILE',
   required=True,
   help="CP2K input file used for the sample calculation.")
 
-parser.add_argument('--basis_sets_s',
+parser.add_argument('--basis_sets',
   metavar='FILE',
   required=True,
   help="File containing all basis sets used for sample.")
 
-parser.add_argument('--xyz_s',
+parser.add_argument('--xyz',
   metavar='FILE',
   required=True,
   help="File containing the atom positions for the sample.")
 
-parser.add_argument('--coeffs_s',
+parser.add_argument('--coeffs',
   metavar='FILE',
   required=True,
   help="File containing the basis coefficients for the sample"
   + " (*.wfn or *.MOLog).")
-
-parser.add_argument('--orbs_sam',
-  type=int,
-  default=1,
-  metavar="l",
-  required=False,
-  help="Integer indicating which orbitals of the sample wavefunction are used"
-  + " following the angular momentum quantum number used by PPSTM basis.")
-
-parser.add_argument('--pbc',
-  type=int,
-  metavar='N',
-  nargs=3,
-  default=[0,0,0],
-  required=False,
-  help="Integers indicating if periodic boundaries are to be applied.")
 
 parser.add_argument('--rcut',
   type=float,
@@ -144,11 +145,8 @@ parser.add_argument('--rcut',
 parser.add_argument('--tip_pos',
   metavar='FILE',
   nargs='+',
-  required=False,
-  help="Paths to files containing relaxed positions of tip apexes."
-  + " Files are assumed to end with 'FILE_*.npy'."
-  + " Reference grids are taken as the proceeding grids with the"
-  + " first using a uniform grid which does not need to be given.")
+  required=True,
+  help="File paths to positions.")
 
 parser.add_argument('--tip_shift',
   type=float,
@@ -158,31 +156,16 @@ parser.add_argument('--tip_shift',
   help="z-distance shift for the metal tip with respect to apex"
   + " in Angstrom.")
 
-parser.add_argument('--heights',
-  type=float,
-  default=[],
-  nargs='+',
-  metavar='A',
-  required=False,
-  help="Constant heights for scan in Angstrom. If set, grid is restricted"
-  + " to the closest heights available otherwise the complete grid is evaluated.")
-
-parser.add_argument('--eval_region',
-  type=float,
-  metavar='A',
-  nargs=6,
-  required=False,
-  help="Evaluation region in Angstrom used when using non-relaxed grid:"
-  + " [xMin xMax yMin yMax zMin zMax]")
-
-parser.add_argument('--eval_dim',
-  type=int,
-  metavar='N',
-  nargs=3,
-  required=False,
-  help="Dimensions of grid if using non-relaxed grid.")
-
 # ------------------------------------------------------------------------------
+
+parser.add_argument('--pdos_list',
+  metavar='FILE',
+  nargs='+',
+  required=True,
+  help="List of PDOS files for the different tip apexes used as tip"
+  + " coefficients. Or, alternatively, five numbers corresponding to"
+  + " [s py pz px de] for uniform PDOS values whose energies are spaced"
+  + " de apart from each other." )
 
 parser.add_argument('--orbs_tip',
   type=int,
@@ -190,52 +173,6 @@ parser.add_argument('--orbs_tip',
   required=True,
   help="Integer indicating which orbitals of the tip are used following the"
   + " angular momentum quantum number.")
-
-parser.add_argument('--rotate',
-  action="store_true", 
-  default=False,
-  required=False,
-  help="If set, tip coefficients will be rotated.")
-
-parser.add_argument('--pdos_list',
-  metavar='FILE',
-  nargs='+',
-  required=False,
-  help="List of PDOS files for the different tip apexes used as tip"
-  + " coefficients. Or, alternatively, five numbers corresponding to"
-  + " [s py pz px de] for uniform PDOS values whose energies are spaced"
-  + " de apart from each other." )
-
-parser.add_argument('--cp2k_input_t',
-  metavar='FILE',
-  required=False,
-  help="CP2K input file used for the tip calculation."
-  + " Alternative to using PDOS.")
-
-parser.add_argument('--basis_sets_t',
-  metavar='FILE',
-  required=False,
-  help="File containing all basis sets used for tip."
-  + " Alternative to using PDOS.")
-
-parser.add_argument('--xyz_t',
-  metavar='FILE',
-  required=False,
-  help="File containing atom positions for the tip."
-  + " Alternative to using PDOS.")
-
-parser.add_argument('--coeffs_t',
-  metavar='FILE',
-  required=False,
-  help="File containing the basis coefficients for the tip (*.wfn or *.MOLog)."
-  + " Alternative to using PDOS.")
-
-parser.add_argument('--tip_ids',
-  type=int,
-  nargs='+',
-  required=False,
-  help="Indices for tip apex atoms used for tunnelling."
-  + " Alternative to using PDOS.")
 
 # ------------------------------------------------------------------------------
 
@@ -252,6 +189,7 @@ parser.add_argument('--emin',
   type=float,
   metavar='E',
   required=False,
+  default=-2.0,
   help="Lower energy used for cutoff with respect to Fermi energy in eV"
   + " for sample.")
 
@@ -259,321 +197,212 @@ parser.add_argument('--emax',
   type=float,
   metavar='E',
   required=False,
+  default=2.0,
   help="Upper energy used for cutoff with respect to Fermi energy in eV"
   + " for sample.")
 
-parser.add_argument('--etip',
+parser.add_argument('--dx',
   type=float,
-  default=0.0,
-  metavar='E',
-  required=False,
-  help="Energy range added to the maximal and minimal bias voltages for"
-  + " the tip energies in eV.")
+  default=0.1)
 
-parser.add_argument('--workfunction',
+parser.add_argument('--extrap_extent',
   type=float,
-  default=5.0,
-  metavar='U',
-  required=False,
-  help="Value for workfunction in eV.")
-
-parser.add_argument('--dos',
-  default='Gaussian',
-  metavar='STRING',
-  required=False,
-  help="Specifies type of density of states used in place of dirac-delta"
-  + " functions. Currently only Gaussians are supported by C++ code.")
-
-parser.add_argument('--eta',
-  type=float,
-  default=0.05,
-  metavar='E',
-  required=False,
-  help="Half of the broading factor used for Lorentzian density of states.")
+  default=5.0)
 
 parser.add_argument('--fwhm',
   type=float,
-  default=0.1,
-  metavar='E',
-  required=False,
-  help="Full width at half maximum used for Gaussian density of states.")
+  default=0.05)
 
-# ------------------------------------------------------------------------------
-
-parser.add_argument('--scaling',
-  type=float,
-  default=1.0,
-  required=False,
-  help="Scaling of the molecule coefficients.")
-
-# TODO if this is to be formalised, this should be done automatically ideally
-parser.add_argument('--mol',
-  type=int,
-  default=0,
-  required=False,
-  help="Index of last atom belonging to molecule (assumed at the start)")
+parser.add_argument('--hartree_file')
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 
 # ==============================================================================
 # ------------------------------------------------------------------------------
-#              READ FILES AND SET UP INPUT WITH PROCESS RANK 0 ONLY
+#                         READ FILES AND SET UP INPUT
 # ------------------------------------------------------------------------------
 # ==============================================================================
+
+time0 = time.time()
+
+# ------------------------------------------------------------------------------
+# BROADCAST INPUT ARGUMENTS
+# ------------------------------------------------------------------------------
+
+args = None
 if rank == 0:
-
   args = parser.parse_args()
-
-  # Check if necessary information was provided
-
-  # No scanning grid
-  if args.tip_pos is None:
-    if args.eval_region is None \
-      or args.eval_dim is None:
-      raise KeyError("Missing tip positions. Please provide either --tip_pos"
-        + " or --eval_region and --eval_dim.")
-    if args.pdos_list is None and len(args.tip_ids) > len(args.tip_shift):
-      raise KeyError("More atoms requested than positions provided. Please"
-        + " provide more arguments for --tip_shift.")
-  # Number of arguments for grid do not match
-  elif args.pdos_list is None and len(args.tip_ids) > len(args.tip_pos):
-      raise KeyError("More atoms requested than positions provided. Please"
-        + " provide more arguments for --tip_pos.")
-  # Missing Chen's coefficients
-  if args.pdos_list is None:
-    if args.cp2k_input_t is None \
-      or args.basis_sets_t is None \
-      or args.xyz_t is None \
-      or args.coeffs_t is None \
-      or args.tip_ids is None:
-      raise KeyError("Missing tip coefficients. Please provide either"
-        + " --pdos_list or --cp2k_input_s and --basis_sets_t and --xyz_t"
-        + " and --coeffs_t and --tip_ids.")
-
-  # ============================================================================
-  # ----------------------------------------------------------------------------
-  #                                LOAD INPUT FILES
-  # ----------------------------------------------------------------------------
-  # ============================================================================
-
-  # ----------------------------------------------------------------------------
-  # READING SAMPLE INFORMATION
-  # ----------------------------------------------------------------------------
-
-  start = time.time()
-  # ABC of sample
-  abc = read_ABC(args.cp2k_input_s)
-  # Coefficients
-  if args.coeffs_s.endswith('.MOLog'):
-    coeffsSam, eigsSam, _ = read_MO(args.coeffs_s, args.emin, args.emax)
-  else:
-    coeffsSam, eigsSam, _ = read_wfn(args.coeffs_s, args.emin, args.emax)
-  # Basis sets (CP2K)
-  elemToBasisSam = BasisSetCP2K.from_file([args.cp2k_input_s, args.basis_sets_s])
-  # Positionsfs_s, args.emi
-  atomsSam = read_xyz(args.xyz_s)
-  # Basis sets (PPSTM set from CP2K)
-  coeffsSam = cp2kToPPSTM(elemToBasisSam, coeffsSam, atomsSam, args.orbs_sam)
-  # Scale specified coefficients by factor in [0,1]
-  coeffsSam = scale(coeffsSam, args.scaling, args.mol)
-  elemToBasisSam = BasisSetPPSTM.from_file([args.workfunction, atomsSam, \
-    args.orbs_sam])
-  end = time.time()
-  print("Reading sample information in {} seconds.".format(end-start))
-
-  # ----------------------------------------------------------------------------
-  # READING EVALUATION GRID (SCAN)
-  # ----------------------------------------------------------------------------
-
-  tipPos = []
-
-  start = time.time()
-  # Relaxed grid
-  if args.tip_pos is not None:
-    for filename in args.tip_pos:
-      tmp, lVec = read_PPPos(filename)
-      tipPos.append(tmp)
-    dim = np.shape(tipPos[0])[:-1]
-    # Reference grid for first grid
-    tipPos.insert(0, np.transpose( np.mgrid[ \
-      lVec[0,0]:lVec[0,0]+lVec[1,0]:dim[0]*1j, \
-      lVec[0,1]:lVec[0,1]+lVec[2,1]:dim[1]*1j, \
-      lVec[0,2]-args.tip_shift[0]:lVec[0,2]+lVec[3,2]-args.tip_shift[0] \
-      :dim[2]*1j], axes=(1,2,3,0) ).copy())
-  # Non-relaxed grid
-  else:
-    dim = args.eval_dim
-    for ids, shift in enumerate(args.tip_shift):
-      tipPos.append(np.transpose( np.mgrid[ \
-        args.eval_region[0]:args.eval_region[1]:args.eval_dim[0]*1j, \
-        args.eval_region[2]:args.eval_region[3]:args.eval_dim[1]*1j, \
-        args.eval_region[4]+shift:args.eval_region[5]+shift:args.eval_dim[2]*1j], \
-        axes=(1,2,3,0) ).copy())
-    # Last grid for final tip apex
-    tipPos.append(np.transpose( np.mgrid[ \
-        args.eval_region[0]:args.eval_region[1]:args.eval_dim[0]*1j, \
-        args.eval_region[2]:args.eval_region[3]:args.eval_dim[1]*1j, \
-        args.eval_region[4]:args.eval_region[5]:args.eval_dim[2]*1j], \
-        axes=(1,2,3,0) ).copy())
-    lVec = np.array([
-      [args.eval_region[0],args.eval_region[2],args.eval_region[4]], 
-      [args.eval_region[1]-args.eval_region[0],0.0, 0.0], 
-      [0.0, args.eval_region[3]-args.eval_region[2], 0.0],
-      [0.0, 0.0, args.eval_region[5]-args.eval_region[4]]])
-  # Restrict grid to heights, if given
-  trueHeights = []
-  if args.heights:
-    trueHeights, heightIds = getHeightIndices(args.heights, lVec, dim, atomsSam)
-    for ids in range(len(tipPos)):
-      tipPos[ids] = np.array(tipPos[ids][:,:,heightIds].copy())
-  end = time.time()
-  print("Reading grid in {} seconds.".format(end-start))
-
-  # ----------------------------------------------------------------------------
-  # READING CHEN'S COEFFICIENTS
-  # ----------------------------------------------------------------------------
-
-  # Energy limits for tip
-  minETip = min(args.voltages)-args.etip
-  maxETip = max(args.voltages)+args.etip
-
-  chenSingles = []
-
-  start = time.time()
-  # Using PDOS
-  if args.pdos_list is not None:
-    idx = 0
-    while idx < len(args.pdos_list):
-      try:
-        chenSingle, eigsTip = constCoeffs(minETip, maxETip, 
-          s=float(args.pdos_list[idx]), \
-          py=float(args.pdos_list[idx+1]), \
-          pz=float(args.pdos_list[idx+2]), \
-          px=float(args.pdos_list[idx+3]), \
-          de=float(args.pdos_list[idx+4]))
-        idx += 5
-      except ValueError:
-        chenSingle, eigsTip = read_PDOS(args.pdos_list[idx], minETip, maxETip)
-        # Take square root to obtain proper coefficients
-        for spinIdx in range(len(chenSingle)):
-          chenSingle[spinIdx] = chenSingle[spinIdx][:,:(args.orbs_tip+1)**2]**0.5
-        idx += 1
-      chenSingles.append(chenSingle)
-  # Using PPSTM coefficients (summed from CP2K)
-  else:
-    # Coefficients
-    if args.coeffs_s.endswith('.MOLog'):
-      coeffsTip, eigsTip, _ = read_MO(args.coeffs_t, minETip, maxETip)
-    else:
-      coeffsTip, eigsTip, _ = read_wfn(args.coeffs_t, minETip, maxETip)
-    # Basis sets (CP2K)
-    elemToBasisTip = BasisSetCP2K.from_file([args.cp2k_input_t, args.basis_sets_t])
-    # Positions
-    atomsTip = read_xyz(args.xyz_t)
-    # Basis sets (PPSTM set from CP2K)
-    coeffsTip = cp2kToPPSTM(elemToBasisTip, coeffsTip, atomsTip, args.orbs_tip, 2)
-    del elemToBasisTip, atomsTip
-    # Take basis coefficients as Chen's coefficients
-    noSpins = len(coeffsTip)
-    for idx in args.tip_ids:
-      chenSingle = [None]*noSpins
-      for spinIdx in range(noSpins):
-        chenSingle[spinIdx] = coeffsTip[spinIdx][idx,:]
-      chenSingles.append(chenSingle)
-  end = time.time()
-  print("Reading of Chen's coefficients in {} seconds.".format(end-start))
-
-  # ----------------------------------------------------------------------------
-  # CHEN'S COEFFICIENTS AND WAVEFUNCTION OBJECTS
-  # ----------------------------------------------------------------------------
-
-  # Compile C++ codes
-  start = time.time()
-  includes = "-I"+sc.get_paths()["include"] + " -I"+np.get_include()
-  os.system("make --directory "+ os.path.dirname(os.path.realpath(__file__)) \
-    +"/cpp INCLUDES='"+includes+"'")
-  end = time.time()
-  print("Compiling in {} seconds.".format(end-start))
-
-  # Get Chen's coefficients on grid
-  chenCoeffs = ChenCoeffsCPP(noOrbs=args.orbs_tip, singles=chenSingles, \
-    eigs=eigsTip, rotate=args.rotate)
-  # Get sample wavefunction
-  wfnSam = WavefunctionCPP(workfunction=args.workfunction, rcut=args.rcut, \
-    pbc=args.pbc, abc=abc, \
-    noOrbsTip=args.orbs_tip, eigs=eigsSam, coefficients=coeffsSam, atoms=atomsSam)
-
-  # ----------------------------------------------------------------------------
-  # WRITING ADDITIONAL INFROMATION
-  # ----------------------------------------------------------------------------
-
-  # Meta information
-  meta = {'dimGrid' : np.shape(tipPos[0])[:-1], \
-          'lVec' : lVec, \
-          'voltages' : args.voltages, \
-          'heights' : np.array(args.heights), \
-          'trueHeights' : np.array(trueHeights), \
-  }
-  np.save(args.output+"_meta.npy", meta)
-
-
-# Remaining processes
-else:
-  chenCoeffs = None
-  wfnSam = None
-  atomsSam = None
-  tipPos = None
-  lVec = None
-  args = None
-
-# ==============================================================================
-# ------------------------------------------------------------------------------
-#                          BROADCASTING NECESSARY OBJECTS
-# ------------------------------------------------------------------------------
-# ==============================================================================
-
-# Broadcast to other process
-start = time.time()
-chenCoeffs = comm.bcast(chenCoeffs, root=0)
-wfnSam = comm.bcast(wfnSam, root=0)
-atomsSam = comm.bcast(atomsSam, root=0)
-lVec = comm.bcast(lVec, root=0)
 args = comm.bcast(args, root=0)
-end = time.time()
-print("Broadcasting in {} seconds for rank {}.".format(end-start, rank))
 
-# ==============================================================================
 # ------------------------------------------------------------------------------
-#                               CREATE STM OBJECT
+# READ RELAXED GRID
 # ------------------------------------------------------------------------------
-# ==============================================================================
+
+# TODO Currently only for 1 process, this should be distributed care has to be
+#      taken since they may not align with distribution of wfn object!
+#      No idea how to handle this as of yet...
+
+tipPos = []
+for filename in args.tip_pos:
+  tmp, lVec = read_PPPos(filename)
+  # Periodic boundaries along x- and y-direction
+  tipPos.append(apply_bounds(tmp,lVec))
+dim = np.shape(tipPos[0])[1:]
+# Metal tip (needed for rotation, no tunnelling considered)
+tipPos.insert(0, np.mgrid[ \
+  lVec[0,0]:lVec[0,0]+lVec[1,0]:dim[0]*1j, \
+  lVec[0,1]:lVec[0,1]+lVec[2,1]:dim[1]*1j, \
+  lVec[0,2]-args.tip_shift[0]:lVec[0,2]+lVec[3,2]-args.tip_shift[0] \
+  :dim[2]*1j])
+
+# TODO Later, tipPos is hopefully already split of splitting here,
+#      we don't split along z axis (K only does x I believe), so 
+#      splitting before this should be fine
+dx = lVec[1,0] / dim[0]
+dy = lVec[2,1] / dim[1]
+dz = lVec[3,2] / dim[2]
+reg_step = np.min([dx,dy,dz])
+# Last position correspond to closest tip atom
+zmin = np.min(tipPos[-1][2])-dz
+# Second position correspond to furthest relevant tip atom
+zmax = np.max(tipPos[1][2])+dz
+# NOTE Conversion to Bohr, done for other values at appropriate times,
+#      but not for this. Thus, this is the only object in Bohr!
+eval_reg = [[lVec[0,0]*ang2bohr,(lVec[0,0]+lVec[1,0])*ang2bohr],
+            [lVec[0,1]*ang2bohr,(lVec[0,1]+lVec[2,1])*ang2bohr],
+            [zmin*ang2bohr,zmax*ang2bohr]]
+print(eval_reg)
+
+# ------------------------------------------------------------------------------
+# READ AND EVALUATE CHEN'S COEFFICIENTS
+# ------------------------------------------------------------------------------
+
+# Energy limits for tip
+minETip = min(args.voltages)
+maxETip = max(args.voltages)
+
+chenSingles = []
 
 start = time.time()
-if args.dos == 'Gaussian':
-  stm = STM_CPP(chenCoeffs, wfnSam, atomsSam, tipPos, lVec, args.dos, \
-    [args.fwhm], comm, size, rank)
-  #stm = STM(chenCoeffs, wfnSam, atomsSam, tipPos, lVec, args.dos, \
-  #  [args.fwhm], comm, size, rank)
-elif args.dos == 'Lorentzian':
-  stm = STM(chenCoeffs, wfnSam, atomsSam, tipPos, lVec, args.dos, \
-    [args.eta], comm, size, rank)
-else:
-  raise KeyError("Could not understand density of state type of "+args.dos+".")
-del tipPos # Saving memory primary for rank 0
-stm.run(args.voltages)
-end = time.time()
-print("Evaluating STM-run method in {} seconds.".format(end-start))
+idx = 0
+while idx < len(args.pdos_list):
+  try:
+    chenSingle, eigsTip = constCoeffs(minETip, maxETip,
+      s=float(args.pdos_list[idx]), \
+      py=float(args.pdos_list[idx+1]), \
+      pz=float(args.pdos_list[idx+2]), \
+      px=float(args.pdos_list[idx+3]), \
+      de=float(args.pdos_list[idx+4]))
+    idx += 5
+  except ValueError:
+    chenSingle, eigsTip = read_PDOS(args.pdos_list[idx], minETip, maxETip)
+    # Take square root to obtain proper coefficients
+    for spinIdx in range(len(chenSingle)):
+      chenSingle[spinIdx] = chenSingle[spinIdx][:,:(args.orbs_tip+1)**2]**0.5
+    idx += 1
+  chenSingles.append(chenSingle)
 
-#stm.write(args.output+".npy")
-stm.write_compressed(args.output)
+chenCoeffs = ChenCoeffsPython(noOrbs=args.orbs_tip, singles=chenSingles, \
+  eigs=eigsTip, rotate=False)
 
-print("Maximum memory usage was {} kilobytes.".format( \
-  resource.getrusage(resource.RUSAGE_SELF).ru_maxrss))
-endTotal = time.time()
-print("Total time was {} seconds for rank {}.".format(endTotal-startTotal, \
-  rank))
-
-# ==============================================================================
 # ------------------------------------------------------------------------------
-# ==============================================================================
+# EVALUATE CP2K WAVE FUNCTION ON REGULAR GRID
+# ------------------------------------------------------------------------------
+
+wfn = cgo.Cp2kGridOrbitals(rank, size, mpi_comm=comm)
+wfn.read_cp2k_input(args.cp2k_input)
+wfn.read_xyz(args.xyz)
+wfn.center_atoms_to_cell()
+wfn.read_basis_functions(args.basis_sets)
+wfn.load_restart_wfn_file(args.coeffs, 
+  emin=args.emin-2.0*args.fwhm,
+  emax=args.emax+2.0*args.fwhm)
+
+print("R%d/%d: loaded wfn, %.2fs"%(rank, size, (time.time() - time0)))
+sys.stdout.flush()
+time1 = time.time()
+
+wfn.calc_morbs_in_region(reg_step,
+  x_eval_region=eval_reg[0],
+  y_eval_region=eval_reg[1],
+  z_eval_region=eval_reg[2],
+  reserve_extrap = args.extrap_extent,
+  eval_cutoff = args.rcut)
+
+print("R%d/%d: evaluated wfn, %.2fs"%(rank, size, (time.time() - time1)))
+sys.stdout.flush()
+time1 = time.time()
+
+print(rank, np.shape(wfn.morb_grids))
+
+# ------------------------------------------------------------------------------
+# EXTRAPOLATE WAVE FUNCTION
+# ------------------------------------------------------------------------------
+
+hart_cube = Cube()
+hart_cube.read_cube_file(args.hartree_file)
+extrap_plane_z = eval_reg[2][1] / ang2bohr \
+  - np.max(wfn.ase_atoms.positions[:, 2])
+hart_plane = hart_cube.get_plane_above_topmost_atom(extrap_plane_z) \
+  - wfn.ref_energy*ev2hartree
+wfn.extrapolate_morbs(hart_plane=hart_plane)
+
+print("R%d/%d: extrapolated wfn, %.2fs"%(rank, size, (time.time() - time1)))
+sys.stdout.flush()
+time1 = time.time()
+
+
+# TODO interpolation should occur when evaluating tunnelling matrix
+# Use wrapper class for this? maybe I can reuse/minimally adjust part of Master
+# thesis code!
+# ------------------------------------------------------------------------------
+# INTERPOLATE WAVE FUNCTIONS
+# ------------------------------------------------------------------------------
+
+# TODO divide up wave function to processes before calling STM class (K handles
+# it inside STM class... really have it outside?)
+
+
+print(wfn.dv)
+print(wfn.eval_cell_n)
+for i in range(3):
+  print((wfn.eval_cell_n[i]-1)*wfn.dv[i])
+x = np.linspace(0,(wfn.eval_cell_n[0]-1)*wfn.dv[0],wfn.eval_cell_n[0])
+y = np.linspace(0,(wfn.eval_cell_n[1]-1)*wfn.dv[1],wfn.eval_cell_n[0])
+z = np.linspace(lVec[0,2],lVec[0,2]+lVec[3,2],wfn.eval_cell_n[0])
+
+from scipy.interpolate import RegularGridInterpolator
+linInp = RegularGridInterpolator((x,y,z),wfn.morb_grids[0][0], method="linear")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
