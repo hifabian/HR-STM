@@ -39,9 +39,9 @@ class Interpolator:
 
       @param x, y, z Positions.
     """
-    indX = (x/self.dx).astype(int)
-    indY = (y/self.dy).astype(int)
-    indZ = (z/self.dz).astype(int)
+    indX = ((x-self.x[0][0])/self.dx).astype(int)
+    indY = ((y-self.x[1][0])/self.dy).astype(int)
+    indZ = ((z-self.x[2][0])/self.dz).astype(int)
 
     return ((self.x[0][indX+1]-x)*(                                 \
               (self.x[1][indY+1]-y)*(                               \
@@ -65,15 +65,15 @@ class Interpolator:
       @brief Evaluates gradient of interpolation in specified direciton.
 
       @param x, y, z Position.
-      @param direct  Direction of gradient (x=0,y=1,z=2).
+      @param direct  Direction of gradient (x=1,y=2,z=3).
     """
-    indX = (x/self.dx).astype(int)
-    indY = (y/self.dy).astype(int)
-    indZ = (z/self.dz).astype(int)
+    indX = ((x-self.x[0][0])/self.dx).astype(int)
+    indY = ((y-self.x[1][0])/self.dy).astype(int)
+    indZ = ((z-self.x[2][0])/self.dz).astype(int)
 
     # The lazy solution: copy-paste + adjust (could do something
     # fancy with indices but whether it's really worth the effort.)
-    if direct == 0:
+    if direct == 1:
       return ((                                                     \
               (self.x[1][indY+1]-y)*(                               \
                  (self.x[2][indZ+1]-z)*self.f[indX+1,indY,indZ]     \
@@ -88,9 +88,9 @@ class Interpolator:
              +(y-self.x[1][indY])*(                                 \
                  (self.x[2][indZ+1]-z)*self.f[indX,indY+1,indZ]     \
                 +(z-self.x[2][indZ])*self.f[indX,indY+1,indZ+1])))  \
-      / (self.dx*self.dy*self.dz)
+        / (self.dx*self.dy*self.dz)
 
-    if direct == 1:
+    if direct == 2:
       return ((                                                     \
               (self.x[0][indX+1]-x)*(                               \
                  (self.x[2][indZ+1]-z)*self.f[indX,indY+1,indZ]     \
@@ -105,9 +105,9 @@ class Interpolator:
              +(x-self.x[0][indX])*(                                 \
                  (self.x[2][indZ+1]-z)*self.f[indX+1,indY,indZ]     \
                 +(z-self.x[2][indZ])*self.f[indX+1,indY,indZ+1])))  \
-      / (self.dx*self.dy*self.dz)
-    
-    return ((                                                       \
+        / (self.dx*self.dy*self.dz)
+    if direct == 3: 
+      return ((                                                     \
               (self.x[1][indY+1]-y)*(                               \
                  (self.x[0][indX+1]-x)*self.f[indX,indY,indZ+1]     \
                 +(x-self.x[0][indX])*self.f[indX+1,indY,indZ+1])    \
@@ -121,6 +121,8 @@ class Interpolator:
              +(y-self.x[1][indY])*(                                 \
                  (self.x[0][indX+1]-x)*self.f[indX,indY+1,indZ]     \
                 +(x-self.x[0][indX])*self.f[indX+1,indY+1,indZ])))  \
-      / (self.dx*self.dy*self.dz)
+        / (self.dx*self.dy*self.dz)
+    raise NotImplementedError( \
+      "Gradient in direction {} is not available".format(direct))
 
 ################################################################################

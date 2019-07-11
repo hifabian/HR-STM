@@ -33,7 +33,6 @@ import argparse # Terminal arguments
 import sys      # System access
 import time     # Timing
 import resource # Memory usage
-import time
 
 import os
 
@@ -54,8 +53,9 @@ from atomistic_tools.cube import Cube
 
 from python.read_input import *
 from python.util import *
-
+from python.basis.wavefunction_cp2k import *
 from python.tunnelling.chen_coeffs_python import *
+from python.hrstm import *
 
 # ------------------------------------------------------------------------------
 
@@ -101,14 +101,13 @@ parser = argparse.ArgumentParser(description="HR-STM for CP2K based on Chen's"
   + " Derivative Rule and the Probe Particle Model.")
 
 # ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
 
 parser.add_argument('--output',
   type=str,
   metavar="OUTPUT",
   default="hrstm",
   required=False,
-  help="Name for output file.")
+  help="Name for output file. File extension added automatically.")
 
 # ------------------------------------------------------------------------------
 
@@ -120,7 +119,7 @@ parser.add_argument('--cp2k_input',
 parser.add_argument('--basis_sets',
   metavar='FILE',
   required=True,
-  help="File containing all basis sets used for sample.")
+  help="File containing all basis sets used for sample calculation.")
 
 parser.add_argument('--xyz',
   metavar='FILE',
@@ -130,15 +129,19 @@ parser.add_argument('--xyz',
 parser.add_argument('--coeffs',
   metavar='FILE',
   required=True,
-  help="File containing the basis coefficients for the sample"
-  + " (*.wfn or *.MOLog).")
+  help="Restart file containing the basis coefficients for the sample.")
 
 parser.add_argument('--rcut',
   type=float,
-  metavar='A',
-  default=15.0,
+  metavar='Ang',
+  default=14.0,
   required=False,
-  help="Cutoff radius used when computing sample wavefunction.")
+  help="Cut-off radius used when computing sample wavefunction.")
+
+parser.add_argument('--hartree_file',
+  metavar='FILE',
+  required=True,
+  help="Cube file with Hartree potential of sample.")
 
 # ------------------------------------------------------------------------------
 
@@ -146,15 +149,13 @@ parser.add_argument('--tip_pos',
   metavar='FILE',
   nargs='+',
   required=True,
-  help="File paths to positions.")
+  help="File paths to positions of probe particles.")
 
 parser.add_argument('--tip_shift',
   type=float,
-  metavar='A',
-  nargs="+",
+  metavar='Ang',
   required=True,
-  help="z-distance shift for the metal tip with respect to apex"
-  + " in Angstrom.")
+  help="z-distance shift for metal tip with respect to apex probe particle.")
 
 # ------------------------------------------------------------------------------
 
@@ -170,7 +171,8 @@ parser.add_argument('--pdos_list',
 parser.add_argument('--orbs_tip',
   type=int,
   metavar="l",
-  required=True,
+  default=1,
+  required=False,
   help="Integer indicating which orbitals of the tip are used following the"
   + " angular momentum quantum number.")
 
@@ -178,45 +180,48 @@ parser.add_argument('--orbs_tip',
 
 parser.add_argument('--voltages',
   type=float,
-  metavar='U',
+  metavar='eV',
   nargs='+',
   required=True,
-  help="Voltages used for STM in eV.")
+  help="Voltages used for STM.")
 
 # ------------------------------------------------------------------------------
 
 parser.add_argument('--emin',
   type=float,
-  metavar='E',
-  required=False,
+  metavar='eV',
   default=-2.0,
-  help="Lower energy used for cutoff with respect to Fermi energy in eV"
-  + " for sample.")
+  required=False,
+  help="Lower energy used for cut-off with respect to Fermi energy for sample.")
 
 parser.add_argument('--emax',
   type=float,
-  metavar='E',
-  required=False,
+  metavar='eV',
   default=2.0,
-  help="Upper energy used for cutoff with respect to Fermi energy in eV"
-  + " for sample.")
+  required=False,
+  help="Upper energy used for cut-off with respect to Fermi energy for sample.")
 
+# TODO support this!
 parser.add_argument('--dx',
   type=float,
-  default=0.1)
+  metavar='Ang',
+  default=0.1,
+  required=False,
+  help="Spacing for grid used by interpolation.")
 
 parser.add_argument('--extrap_extent',
   type=float,
-  default=5.0)
+  metavar='Ang',
+  default=0.5,
+  required=False,
+  help="Extent of the extrapolation region.")
 
 parser.add_argument('--fwhm',
   type=float,
-  default=0.05)
-
-parser.add_argument('--hartree_file')
-
-# ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
+  metavar='eV',
+  default=0.05,
+  required=False,
+  help="Full width at half maximum for Gaussian broadening of sample states.")
 
 # ==============================================================================
 # ------------------------------------------------------------------------------
@@ -224,6 +229,7 @@ parser.add_argument('--hartree_file')
 # ------------------------------------------------------------------------------
 # ==============================================================================
 
+# TODO remove this
 time0 = time.time()
 
 # ------------------------------------------------------------------------------
@@ -239,40 +245,27 @@ args = comm.bcast(args, root=0)
 # READ RELAXED GRID
 # ------------------------------------------------------------------------------
 
-# TODO Currently only for 1 process, this should be distributed care has to be
-#      taken since they may not align with distribution of wfn object!
-#      No idea how to handle this as of yet...
+# TODO Parallelization! Divide tip positions equally along x-direction to the
+#      processes.
 
 tipPos = []
+
+start = time.time()
 for filename in args.tip_pos:
   tmp, lVec = read_PPPos(filename)
-  # Periodic boundaries along x- and y-direction
+  # Restrict tip positions to cell box and store it
   tipPos.append(apply_bounds(tmp,lVec))
 dim = np.shape(tipPos[0])[1:]
 # Metal tip (needed for rotation, no tunnelling considered)
+# NOTE Not needed after determining the rotational matrices!
 tipPos.insert(0, np.mgrid[ \
   lVec[0,0]:lVec[0,0]+lVec[1,0]:dim[0]*1j, \
   lVec[0,1]:lVec[0,1]+lVec[2,1]:dim[1]*1j, \
-  lVec[0,2]-args.tip_shift[0]:lVec[0,2]+lVec[3,2]-args.tip_shift[0] \
+  lVec[0,2]-args.tip_shift:lVec[0,2]+lVec[3,2]-args.tip_shift \
   :dim[2]*1j])
-
-# TODO Later, tipPos is hopefully already split of splitting here,
-#      we don't split along z axis (K only does x I believe), so 
-#      splitting before this should be fine
-dx = lVec[1,0] / dim[0]
-dy = lVec[2,1] / dim[1]
-dz = lVec[3,2] / dim[2]
-reg_step = np.min([dx,dy,dz])
-# Last position correspond to closest tip atom
-zmin = np.min(tipPos[-1][2])-dz
-# Second position correspond to furthest relevant tip atom
-zmax = np.max(tipPos[1][2])+dz
-# NOTE Conversion to Bohr, done for other values at appropriate times,
-#      but not for this. Thus, this is the only object in Bohr!
-eval_reg = [[lVec[0,0]*ang2bohr,(lVec[0,0]+lVec[1,0])*ang2bohr],
-            [lVec[0,1]*ang2bohr,(lVec[0,1]+lVec[2,1])*ang2bohr],
-            [zmin*ang2bohr,zmax*ang2bohr]]
-print(eval_reg)
+end = time.time()
+print("Reading tip positions in {} seconds for rank {}.".format(end-start, \
+  rank))
 
 # ------------------------------------------------------------------------------
 # READ AND EVALUATE CHEN'S COEFFICIENTS
@@ -281,128 +274,123 @@ print(eval_reg)
 # Energy limits for tip
 minETip = min(args.voltages)
 maxETip = max(args.voltages)
-
 chenSingles = []
 
 start = time.time()
-idx = 0
-while idx < len(args.pdos_list):
-  try:
-    chenSingle, eigsTip = constCoeffs(minETip, maxETip,
-      s=float(args.pdos_list[idx]), \
-      py=float(args.pdos_list[idx+1]), \
-      pz=float(args.pdos_list[idx+2]), \
-      px=float(args.pdos_list[idx+3]), \
-      de=float(args.pdos_list[idx+4]))
-    idx += 5
-  except ValueError:
-    chenSingle, eigsTip = read_PDOS(args.pdos_list[idx], minETip, maxETip)
-    # Take square root to obtain proper coefficients
-    for spinIdx in range(len(chenSingle)):
-      chenSingle[spinIdx] = chenSingle[spinIdx][:,:(args.orbs_tip+1)**2]**0.5
-    idx += 1
-  chenSingles.append(chenSingle)
-
-chenCoeffs = ChenCoeffsPython(noOrbs=args.orbs_tip, singles=chenSingles, \
-  eigs=eigsTip, rotate=False)
+if rank == 0: # Functions called here only support single process!
+  idx = 0 # Index of input argument
+  while idx < len(args.pdos_list):
+    try:
+      chenSingle, eigsTip = constCoeffs(minETip, maxETip,
+        s=float(args.pdos_list[idx]), \
+        py=float(args.pdos_list[idx+1]), \
+        pz=float(args.pdos_list[idx+2]), \
+        px=float(args.pdos_list[idx+3]), \
+        de=float(args.pdos_list[idx+4]))
+      idx += 5
+    except ValueError:
+      chenSingle, eigsTip = read_PDOS(args.pdos_list[idx], minETip, maxETip)
+      # Take square root to obtain proper coefficients
+      for spinIdx in range(len(chenSingle)):
+        chenSingle[spinIdx] = chenSingle[spinIdx][:,:(args.orbs_tip+1)**2]**0.5
+      idx += 1
+    chenSingles.append(chenSingle)
+  chenCoeffs = ChenCoeffsPython(noOrbs=args.orbs_tip, singles=chenSingles, \
+    eigs=eigsTip, rotate=False)
+else:
+  chenCoeffs = None
+chenCoeffs = comm.bcast(chenCoeffs, root=0)
+chenCoeffs.setGrids(tipPos)
+end = time.time()
+print("Reading tip coefficients in {} seconds for rank {}.".format(end-start, \
+  rank))
 
 # ------------------------------------------------------------------------------
 # EVALUATE CP2K WAVE FUNCTION ON REGULAR GRID
 # ------------------------------------------------------------------------------
 
+# TODO determine extrapolation plane!
+
+# TODO these need to be evaluated across process!
+# z-interval + safety bounds
+zmin = np.min(tipPos[-1][2])-args.dx
+zmax = np.max(tipPos[1][2])+args.dx
+evalRegion = np.array([[lVec[0,0],lVec[0,0]+lVec[1,0]], \
+                       [lVec[0,1],lVec[0,1]+lVec[2,1]], \
+                       [zmin,zmax]])
+print("CP2K Evaluation Region:\n", evalRegion)
+
+start = time.time()
+# Set up CP2K wave function object
 wfn = cgo.Cp2kGridOrbitals(rank, size, mpi_comm=comm)
 wfn.read_cp2k_input(args.cp2k_input)
 wfn.read_xyz(args.xyz)
 wfn.center_atoms_to_cell()
 wfn.read_basis_functions(args.basis_sets)
-wfn.load_restart_wfn_file(args.coeffs, 
+wfn.load_restart_wfn_file(args.coeffs,
   emin=args.emin-2.0*args.fwhm,
   emax=args.emax+2.0*args.fwhm)
-
-print("R%d/%d: loaded wfn, %.2fs"%(rank, size, (time.time() - time0)))
-sys.stdout.flush()
-time1 = time.time()
-
-wfn.calc_morbs_in_region(reg_step,
-  x_eval_region=eval_reg[0],
-  y_eval_region=eval_reg[1],
-  z_eval_region=eval_reg[2],
+wfn.calc_morbs_in_region(args.dx,
+  x_eval_region=evalRegion[0]*ang2bohr,
+  y_eval_region=evalRegion[1]*ang2bohr,
+  z_eval_region=evalRegion[2]*ang2bohr,
   reserve_extrap = args.extrap_extent,
   eval_cutoff = args.rcut)
-
-print("R%d/%d: evaluated wfn, %.2fs"%(rank, size, (time.time() - time1)))
-sys.stdout.flush()
-time1 = time.time()
-
-print(rank, np.shape(wfn.morb_grids))
+end = time.time()
+print("Building CP2K wave function matrix in {} seconds for rank {}.".format( \
+  end-start, rank))
 
 # ------------------------------------------------------------------------------
 # EXTRAPOLATE WAVE FUNCTION
 # ------------------------------------------------------------------------------
 
-hart_cube = Cube()
-hart_cube.read_cube_file(args.hartree_file)
-extrap_plane_z = eval_reg[2][1] / ang2bohr \
-  - np.max(wfn.ase_atoms.positions[:, 2])
-hart_plane = hart_cube.get_plane_above_topmost_atom(extrap_plane_z) \
+start = time.time()
+hartCube = Cube()
+hartCube.read_cube_file(args.hartree_file)
+extrapPlaneZ = evalRegion[2][1] - np.max(wfn.ase_atoms.positions[:,2])
+hartPlane = hartCube.get_plane_above_topmost_atom(extrapPlaneZ) \
   - wfn.ref_energy*ev2hartree
-wfn.extrapolate_morbs(hart_plane=hart_plane)
+wfn.extrapolate_morbs(hart_plane=hartPlane)
+end = time.time()
+print("Extrapolating CP2K wave function matrix in {} seconds for rank {}."\
+  .format(end-start, rank))
 
-print("R%d/%d: extrapolated wfn, %.2fs"%(rank, size, (time.time() - time1)))
-sys.stdout.flush()
-time1 = time.time()
-
-
-# TODO interpolation should occur when evaluating tunnelling matrix
-# Use wrapper class for this? maybe I can reuse/minimally adjust part of Master
-# thesis code!
 # ------------------------------------------------------------------------------
-# INTERPOLATE WAVE FUNCTIONS
+# CREATE WAVE FUNCTION OBJECT (WRAPPER)
 # ------------------------------------------------------------------------------
 
-# TODO divide up wave function to processes before calling STM class (K handles
-# it inside STM class... really have it outside?)
+# TODO Parallelization! Use the tip position on each rank to determine the
+#      necessary values from wave function matrix and then request it.
+#      (Create a shared vector with information what each process needs, then
+#       send the chunks according to this vector! (Note: Only along x-axis)
+wfnSam = WavefunctionHelp(eigs=wfn.morb_energies, atoms=wfn.ase_atoms, \
+  noOrbsTip=args.orbs_tip, wfnMatrix=wfn.morb_grids, evalRegion=evalRegion)
+wfnSam.setGrids(tipPos[1:])
+
+# ==============================================================================
+# ------------------------------------------------------------------------------
+#                             CREATE HR-STM OBJECT
+# ------------------------------------------------------------------------------
+# ==============================================================================
+
+# TODO (use the python one, slow on this machine but I believe it's just as fast
+#       on daint)
+
+start = time.time()
+hrstm = HRSTM(chenCoeffs, wfnSam, args.fwhm, \
+  rank, size, comm)
+del tipPos
+hrstm.run(args.voltages)
+end = time.time()
+print("Evaluating HRSTM-run method in {} seconds.".format(end-start))
+
+print(np.shape(hrstm.localCurrent))
+import matplotlib.pyplot as plt
+plt.figure()
+plt.imshow(hrstm.localCurrent[:,:,0,0])
+plt.show()
 
 
-print(wfn.dv)
-print(wfn.eval_cell_n)
-for i in range(3):
-  print((wfn.eval_cell_n[i]-1)*wfn.dv[i])
-x = np.linspace(0,(wfn.eval_cell_n[0]-1)*wfn.dv[0],wfn.eval_cell_n[0])
-y = np.linspace(0,(wfn.eval_cell_n[1]-1)*wfn.dv[1],wfn.eval_cell_n[0])
-z = np.linspace(lVec[0,2],lVec[0,2]+lVec[3,2],wfn.eval_cell_n[0])
-
-from scipy.interpolate import RegularGridInterpolator
-linInp = RegularGridInterpolator((x,y,z),wfn.morb_grids[0][0], method="linear")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+endTotal = time.time()
+print("Total time was {} seconds for rank {}.".format(endTotal-startTotal, \
+  rank))

@@ -141,10 +141,7 @@ class STM():
 
       @args Arguments in form of a named tuple (ene, sigma).
     """
-    if abs(args.ene) > 4.710*args.sigma:
-      return 0.0
-    else:
-      return np.exp(-(args.ene / args.sigma)**2) / (args.sigma*(2*np.pi)**0.5)
+    return np.exp(-(args.ene / args.sigma)**2) / (args.sigma*(2*np.pi)**0.5)
 
   ##############################################################################
   def _compute(self):
@@ -210,7 +207,7 @@ class STM():
                 #if voltage > 0 and (eigTip <= 0 or eigTip > voltage+0.001) \
                 #or voltage <= 0 and (eigTip > 0 or eigTip < voltage-0.001):
                 #  continue
-                self.localCurrent[:,volIdx] += np.sign(eigTip)*tunnelMatrixSquared \
+                self.localCurrent[...,volIdx] += np.sign(eigTip)*tunnelMatrixSquared \
                   * self._dosSample(dosArgsSample)
 
   ##############################################################################

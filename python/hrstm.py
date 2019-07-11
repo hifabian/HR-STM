@@ -3,8 +3,9 @@
 
 import numpy as np
 
-# Generic interpolator that provides a gradient operation.
-from interpolator import Interpolator
+from basis.wavefunction_abc import *
+from tunnelling.chen_coeffs_abc import *
+from tunnelling.tunnel_matrix import *
 
 ################################################################################
 class HRSTM:
@@ -20,8 +21,23 @@ class HRSTM:
           array along the x-direction only.
   """
 
-  def __init__(self):
-    pass
+  def __init__(self, chenCoeffs, wfn, fwhm, rank, size, comm):
+    """!
+      @brief Initiator
+
+      @param chenCoeffs Chen coefficients.
+      @param wfn        Wave function.
+      @param fwhm       Full width at half maximum for sample density of states.
+      @param rank       Rank of MPI process.
+      @param size       Total number of MPI processes.
+      @param comm       Communicator of MPI processes.
+    """
+    self._chenCoeffs = chenCoeffs
+    self._wfn = wfn
+    self._sigma = fwhm/2.35482
+    self._rank = rank
+    self._size = size
+    self._comm = comm
 
   ##############################################################################
   def _compute(self):
@@ -30,6 +46,11 @@ class HRSTM:
              stored in self.localCurrent and needs to be assembled.
     """
     pass
+
+  def _dos(self, ene):
+    """! @brief Gaussian density of states. """
+    return np.exp(-(ene / self._sigma)**2) / (self._sigma*(2*np.pi)**0.5)
+    
 
   ##############################################################################
   def gather(self):
@@ -72,6 +93,48 @@ class HRSTM:
 
       @param voltages List of bias voltages in eV.
     """
-    pass
+    self._voltages = voltages
+
+    # Tunnel matrix object
+    self._tunnelMatrix = TunnelMatrix(self._chenCoeffs, self._wfn)
+
+    dimGrid = self._tunnelMatrix.dimGrid
+    # Currents for all bias voltages
+    self.localCurrent = np.zeros(dimGrid+(len(self._voltages),), \
+      dtype=np.float64)
+
+    # Over each separate tunnel process (e.g. to O- or C-atom)
+    for tunnelIdx in range(self._chenCoeffs.noTunnels):
+      for spinTipIdx in range(self._chenCoeffs.noSpins):
+        for etIdx in range(self._chenCoeffs.noEigs[spinTipIdx]):
+          eigTip = self._chenCoeffs.eigs[spinTipIdx][etIdx]
+          for spinSamIdx in range(self._wfn.noSpins):
+            for esIdx in range(self._wfn.noEigs[spinSamIdx]):
+              eigSample = self._wfn.eigs[spinSamIdx][esIdx]
+              # Only if tip and sample are occupied/unoccupied
+              if eigTip*eigSample > 0.0 \
+                or (eigTip == 0.0 and eigSample <= 0.0) \
+                or (eigSample == 0.0 and eigTip <= 0.0):
+                continue
+
+              # Checking if density of states will be 0 anyway
+              skip = True
+              for voltage in self._voltages:
+                ene = voltage+eigTip-eigSample
+                if abs(ene) < 4.0*self._sigma:
+                  skip = False
+                  break
+              if skip:
+                continue
+
+              # Otherwise compute tunnelling matrix entry
+              tunnelMatrixSquared = (self._tunnelMatrix[tunnelIdx,spinTipIdx,etIdx, \
+                spinSamIdx,esIdx])**2
+              for volIdx, voltage in enumerate(self._voltages):
+                ene = voltage+eigTip-eigSample
+                if  abs(ene) >= 4.0*self._sigma:
+                  continue
+                self.localCurrent[...,volIdx] += np.sign(eigTip)*self._dos(ene) \
+                  * tunnelMatrixSquared
 
 ################################################################################

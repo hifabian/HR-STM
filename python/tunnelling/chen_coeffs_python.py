@@ -74,7 +74,8 @@ class ChenCoeffsPython(chen_coeffs_abc.ChenCoeffsAbstract):
     return coeffs
 
   def setGrids(self, grids):
-    self._grids = cp.deepcopy(grids)
+#    self._grids = cp.deepcopy(grids)
+    self._grids = grids
 
     # s-orbtial on tip only
     if self.noOrbs == 0:

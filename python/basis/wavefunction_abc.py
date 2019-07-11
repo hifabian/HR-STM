@@ -67,14 +67,14 @@ class WavefunctionAbstract(ABC):
   def dimGrid(self):
     """! @return Dimension of one grid. Throws an AttributeError if not set. """
     if self._grids is not None and self._grids != []:
-      return np.shape(self._grids[0])[:-1]
+      return np.shape(self._grids[0])[1:]
     else:
       raise AttributeError("No grid is set yet!")
 
   @property
   def noSpins(self):
     """! @return Number of spins. """
-    return len(self._coefficients)
+    return len(self._eigs)
 
   @property
   def noOrbsTip(self):

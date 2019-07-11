@@ -49,7 +49,7 @@ class ChenCoeffsAbstract(ABC):
   def dimGrid(self):
     """! @return Dimension of one grid. Throws an AttributeError if not set. """
     if self._grids != []:
-      return np.shape(self._grids[0])[:-1]
+      return np.shape(self._grids[0])[1:]
     else:
       raise AttributeError("No grid is set yet!")
 
