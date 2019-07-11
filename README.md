@@ -1,8 +1,8 @@
 # About this Branch
 
-This branch is meant to allow gradual transitioning from a ghost molecule
-to a full molecule.
-For simplicity, we simply allow the coefficients of the molecule to be scaled.
+Currently work in progress. Other branch uses approximate basis whereas this 
+branch aims at using the CP2K wave function + extrapolation for region far
+away from surface.
 
 # HR-STM Simulation
 
