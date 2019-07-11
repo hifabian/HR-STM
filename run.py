@@ -209,12 +209,12 @@ parser.add_argument('--dx',
   required=False,
   help="Spacing for grid used by interpolation.")
 
-parser.add_argument('--extrap_extent',
+parser.add_argument('--extrap_dist',
   type=float,
   metavar='Ang',
   default=0.5,
   required=False,
-  help="Extent of the extrapolation region.")
+  help="Starting distance from highest atom where extrapolation is used from.")
 
 parser.add_argument('--fwhm',
   type=float,
@@ -310,6 +310,8 @@ print("Reading tip coefficients in {} seconds for rank {}.".format(end-start, \
 # ------------------------------------------------------------------------------
 
 # TODO determine extrapolation plane!
+args.extrap_dist
+extrap_extent = ...
 
 # TODO these need to be evaluated across process!
 # z-interval + safety bounds
@@ -325,7 +327,6 @@ start = time.time()
 wfn = cgo.Cp2kGridOrbitals(rank, size, mpi_comm=comm)
 wfn.read_cp2k_input(args.cp2k_input)
 wfn.read_xyz(args.xyz)
-wfn.center_atoms_to_cell()
 wfn.read_basis_functions(args.basis_sets)
 wfn.load_restart_wfn_file(args.coeffs,
   emin=args.emin-2.0*args.fwhm,
