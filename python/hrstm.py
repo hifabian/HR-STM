@@ -105,12 +105,12 @@ class HRSTM:
 
     # Over each separate tunnel process (e.g. to O- or C-atom)
     for tunnelIdx in range(self._chenCoeffs.noTunnels):
-      for spinTipIdx in range(self._chenCoeffs.noSpins):
-        for etIdx in range(self._chenCoeffs.noEigs[spinTipIdx]):
-          eigTip = self._chenCoeffs.eigs[spinTipIdx][etIdx]
-          for spinSamIdx in range(self._wfn.noSpins):
-            for esIdx in range(self._wfn.noEigs[spinSamIdx]):
-              eigSample = self._wfn.eigs[spinSamIdx][esIdx]
+      for spinSamIdx in range(self._wfn.noSpins):
+        for esIdx in range(self._wfn.noEigs[spinSamIdx]):
+          eigSample = self._wfn.eigs[spinSamIdx][esIdx]
+          for spinTipIdx in range(self._chenCoeffs.noSpins):
+            for etIdx in range(self._chenCoeffs.noEigs[spinTipIdx]):
+              eigTip = self._chenCoeffs.eigs[spinTipIdx][etIdx]
               # Only if tip and sample are occupied/unoccupied
               if eigTip*eigSample > 0.0 \
                 or (eigTip == 0.0 and eigSample <= 0.0) \

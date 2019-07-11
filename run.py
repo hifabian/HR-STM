@@ -310,8 +310,8 @@ print("Reading tip coefficients in {} seconds for rank {}.".format(end-start, \
 # ------------------------------------------------------------------------------
 
 # TODO determine extrapolation plane!
-args.extrap_dist
-extrap_extent = ...
+#args.extrap_dist
+args.extrap_extent = 0
 
 # TODO these need to be evaluated across process!
 # z-interval + safety bounds

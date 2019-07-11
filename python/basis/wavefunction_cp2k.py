@@ -55,20 +55,25 @@ class WavefunctionHelp(wavefunction_abc.WavefunctionAbstract):
 
   ##############################################################################
   def __getitem__(self, idxTupel):
-    """!
-      @attention idxTupel differs from base class.
+    gridIdx, spinIdx, eigIdx = idxTupel
+    # Check if already evaluated
+    if self._wfn is not None \
+      and self._gridC == gridIdx \
+      and self._spinC == spinIdx \
+      and self._eigC == eigIdx:
+      return self._wfn
+    # Storage container
+    self._wfn = np.empty(((self.noOrbsTip+1)**2,)+self.dimGrid)
 
-      @param idxTupel Tupel of indices (gridIdx, spinIdx, eigIdx, derIdx).
-
-      @return Wavefunction or derivative evaluated at grid points.
-    """
-    gridIdx, spinIdx, eigIdx, derIdx = idxTupel
     # Create interpolator
     interp = Interpolator(self._regGrid, self._wfnMatrix[spinIdx][eigIdx])
-    # Return interpolated values
-    if derIdx == 0:
-      return interp(*self._grids[gridIdx])
-    else:
-      return interp.gradient(*self._grids[gridIdx], derIdx)
+    self._wfn[0] = interp(*self._grids[gridIdx])
+    if self.noOrbsTip:
+      self._wfn[1] = interp.gradient(*self._grids[gridIdx],1)
+      self._wfn[2] = interp.gradient(*self._grids[gridIdx],2)
+      self._wfn[3] = interp.gradient(*self._grids[gridIdx],3)
+    
+    self._gridC, self._spinC, self._eigC = idxTupel
+    return self._wfn
 
 ################################################################################

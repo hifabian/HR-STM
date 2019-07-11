@@ -67,13 +67,8 @@ class TunnelMatrix():
     noDer = (noOrbs+1)**2
 
     # Compute tunnel matrix element and return
-    tunnelMatrix = np.zeros(self.dimGrid)
-    for der in range(noDer):
-      tunnelMatrix += self.chenCoeffs[tunnelIdx,spinTipIdx,eTipIdx][der] \
-      * self.wfn[tunnelIdx,spinSamIdx,eSamIdx,der]
-    return tunnelMatrix
-#    return np.einsum("io,io->o", \
-#      self.chenCoeffs[tunnelIdx,spinTipIdx,eTipIdx][:noDer], \
-#      self.wfn[tunnelIdx,spinSamIdx,eSamIdx][:noDer])
+    return np.einsum("o...,o...->...", \
+      self.chenCoeffs[tunnelIdx,spinTipIdx,eTipIdx][:noDer], \
+      self.wfn[tunnelIdx,spinSamIdx,eSamIdx][:noDer])
 
 ################################################################################
