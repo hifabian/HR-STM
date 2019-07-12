@@ -32,6 +32,11 @@ class Interpolator:
     self.dx = x[0][1]-x[0][0]
     self.dy = x[1][1]-x[1][0]
     self.dz = x[2][1]-x[2][0]
+    self.derF = [
+      np.gradient(self.f,self.x[0],edge_order=2,axis=0),
+      np.gradient(self.f,self.x[1],edge_order=2,axis=1),
+      np.gradient(self.f,self.x[2],edge_order=2,axis=2)]
+
     self.intrX = sp.interpolate.RegularGridInterpolator(self.x, \
       np.gradient(self.f,self.x[0],edge_order=2,axis=0), \
       method='linear')
@@ -143,14 +148,31 @@ class Interpolator:
       @param x, y, z Position.
       @param direct  Direction of gradient (x=1,y=2,z=3).
     """
-    if direct == 1:
-      return self.intrX(np.array([x,y,z]).transpose()).transpose()
-    if direct == 2:
-      return self.intrY(np.array([x,y,z]).transpose()).transpose()
-    if direct == 3:
-      return self.intrZ(np.array([x,y,z]).transpose()).transpose()
-    raise NotImplementedError( \
-      "Gradient in direction {} is not available".format(direct))
+    try:
+      tmp = self.derF[direct-1]
+    except IndexError:
+      raise NotImplementedError( \
+        "Gradient in direction {} is not available".format(direct))
+
+    indX = ((x-self.x[0][0])/self.dx).astype(int)
+    indY = ((y-self.x[1][0])/self.dy).astype(int)
+    indZ = ((z-self.x[2][0])/self.dz).astype(int)
+
+    return ((self.x[0][indX+1]-x)*(                              \
+              (self.x[1][indY+1]-y)*(                            \
+                 (self.x[2][indZ+1]-z)*tmp[indX,indY,indZ]       \
+                +(z-self.x[2][indZ])*tmp[indX,indY,indZ+1])      \
+             +(y-self.x[1][indY])*(                              \
+                 (self.x[2][indZ+1]-z)*tmp[indX,indY+1,indZ]     \
+                +(z-self.x[2][indZ])*tmp[indX,indY+1,indZ+1]))   \
+           +(x-self.x[0][indX])*(                                \
+              (self.x[1][indY+1]-y)*(                            \
+                 (self.x[2][indZ+1]-z)*tmp[indX+1,indY,indZ]     \
+                +(z-self.x[2][indZ])*tmp[indX+1,indY,indZ+1])    \
+             +(y-self.x[1][indY])*(                              \
+                 (self.x[2][indZ+1]-z)*tmp[indX+1,indY+1,indZ]   \
+                +(z-self.x[2][indZ])*tmp[indX+1,indY+1,indZ+1])))\
+      / (self.dx*self.dy*self.dz)
 
 
 ################################################################################
