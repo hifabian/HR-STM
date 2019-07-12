@@ -176,6 +176,12 @@ parser.add_argument('--orbs_tip',
   help="Integer indicating which orbitals of the tip are used following the"
   + " angular momentum quantum number.")
 
+parser.add_argument('--rotate',
+  action="store_true",
+  default=False,
+  required=False,
+  help="If set, tip coefficients will be rotated.")
+
 # ------------------------------------------------------------------------------
 
 parser.add_argument('--voltages',
@@ -296,7 +302,7 @@ if rank == 0: # Functions called here only support single process!
       idx += 1
     chenSingles.append(chenSingle)
   chenCoeffs = ChenCoeffsPython(noOrbs=args.orbs_tip, singles=chenSingles, \
-    eigs=eigsTip, rotate=False)
+    eigs=eigsTip, rotate=args.rotate)
 else:
   chenCoeffs = None
 chenCoeffs = comm.bcast(chenCoeffs, root=0)

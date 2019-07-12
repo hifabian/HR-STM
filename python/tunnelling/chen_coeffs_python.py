@@ -92,12 +92,48 @@ class ChenCoeffsPython(chen_coeffs_abc.ChenCoeffsAbstract):
       shiftedGrids = []
       data = []
       for i in range(self.noTunnels):
-        shiftedGrids.append(np.array(grids[i+1]-grids[i], \
-          order='C').reshape(noPoints,3))
+        shiftedGrids.append(np.array([
+          grids[i+1][0]-grids[i][0],
+          grids[i+1][1]-grids[i][1],
+          grids[i+1][2]-grids[i][2]]\
+          ).transpose().reshape(noPoints,3))
         data.append(np.empty(9*noPoints))
       # Sparse matrix storage as COO
       rowIdx = np.empty(9*noPoints, dtype=int)
       colIdx = np.empty(9*noPoints, dtype=int)
+
+      """
+      # TODO matrix operations instead of loop
+      for tunnelIdx in range(self.noTunnels):
+        v = np.array([0.0,0.0,-1.0])
+        # Rotated vector
+        w = shiftedGrids[tunnelIdx]
+        w /= np.linalg.norm(w,axis=0)
+        # Rotation axis (no rotation around x-y)
+        n = np.cross(v,w,axisb=0)
+
+        # Check if actually rotated
+        rotated = np.isclose(np.linalg.norm(n,axis=1),0.0)
+        cosa = np.dot(v,w[rotated])
+        sina = (1-cos**2)**0.5
+
+
+          if not math.isclose(np.linalg.norm(n), 0.0):
+            n /= np.linalg.norm(n)
+            # Trigonometric values for rotation angle
+            cosa = np.dot(v,w)
+            sina = (1-cosa*cosa)**0.5
+            # Resulting matrix for p-orbitals: P^T * R^T * P
+            PtRtP = np.array([[n[1]**2*(1-cosa)+cosa, n[2]*n[1]*(1-cosa)-n[0]*sina, n[0]*n[1]*(1-cosa)+n[2]*sina], \
+                              [n[1]*n[2]*(1-cosa)+n[0]*sina, n[2]**2*(1-cosa)+cosa, n[0]*n[2]*(1-cosa)-n[1]*sina], \
+                              [n[1]*n[0]*(1-cosa)-n[2]*sina, n[2]*n[0]*(1-cosa)+n[1]*sina, n[0]**2*(1-cosa)+cosa]])
+          
+          else:
+            PtRtP = np.array([[1.0, 0.0, 0.0], \
+                              [0.0, 1.0, 0.0], \
+                              [0.0, 0.0, 1.0]])
+          data[tunnelIdx][curIdx:curIdx+9] = PtRtP.ravel()
+      """
 
       curIdx = 0 # Current entry for data
       for pointIdx in range(noPoints):
