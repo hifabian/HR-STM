@@ -92,58 +92,29 @@ class ChenCoeffsPython(chen_coeffs_abc.ChenCoeffsAbstract):
       shiftedGrids = []
       data = []
       for i in range(self.noTunnels):
-        shiftedGrids.append(np.array([
-          grids[i+1][0]-grids[i][0],
-          grids[i+1][1]-grids[i][1],
-          grids[i+1][2]-grids[i][2]]\
-          ).transpose().reshape(noPoints,3))
+        shiftedGrids.append(
+          np.array(
+          [grids[i+1][0]-grids[i][0],
+           grids[i+1][1]-grids[i][1],
+           grids[i+1][2]-grids[i][2]]
+          ).reshape(3,noPoints))
         data.append(np.empty(9*noPoints))
       # Sparse matrix storage as COO
       rowIdx = np.empty(9*noPoints, dtype=int)
       colIdx = np.empty(9*noPoints, dtype=int)
 
-      """
-      # TODO matrix operations instead of loop
+      idxHelper = np.arange(3*noPoints,dtype=int)
       for tunnelIdx in range(self.noTunnels):
         v = np.array([0.0,0.0,-1.0])
         # Rotated vector
         w = shiftedGrids[tunnelIdx]
         w /= np.linalg.norm(w,axis=0)
         # Rotation axis (no rotation around x-y)
-        n = np.cross(v,w,axisb=0)
+        n = np.cross(v,w,axisb=0).transpose()
+        # Trigonometric values
+        cosa = np.dot(v,w)
+        sina = (1-cosa**2)**0.5
 
-        # Check if actually rotated
-        rotated = np.isclose(np.linalg.norm(n,axis=1),0.0)
-        cosa = np.dot(v,w[rotated])
-        sina = (1-cos**2)**0.5
-
-
-          if not math.isclose(np.linalg.norm(n), 0.0):
-            n /= np.linalg.norm(n)
-            # Trigonometric values for rotation angle
-            cosa = np.dot(v,w)
-            sina = (1-cosa*cosa)**0.5
-            # Resulting matrix for p-orbitals: P^T * R^T * P
-            PtRtP = np.array([[n[1]**2*(1-cosa)+cosa, n[2]*n[1]*(1-cosa)-n[0]*sina, n[0]*n[1]*(1-cosa)+n[2]*sina], \
-                              [n[1]*n[2]*(1-cosa)+n[0]*sina, n[2]**2*(1-cosa)+cosa, n[0]*n[2]*(1-cosa)-n[1]*sina], \
-                              [n[1]*n[0]*(1-cosa)-n[2]*sina, n[2]*n[0]*(1-cosa)+n[1]*sina, n[0]**2*(1-cosa)+cosa]])
-          
-          else:
-            PtRtP = np.array([[1.0, 0.0, 0.0], \
-                              [0.0, 1.0, 0.0], \
-                              [0.0, 0.0, 1.0]])
-          data[tunnelIdx][curIdx:curIdx+9] = PtRtP.ravel()
-      """
-
-      curIdx = 0 # Current entry for data
-      for pointIdx in range(noPoints):
-        # Rotation matrix is defined by:
-        #   R*x = n*(n . x) + cos(a)*(n ^ x) + sin(a)*(n ^ x) ^ n
-        # with n the axis of rotation and a the angle. The first term 
-        # corresponds to the unchanged distance along the rotation axis.
-        # The second term is the height, orthogonal to x, while the third
-        # is the distance to the axis with respect to a plane.
-        # One may write it R as a matrix explicitely:
         #  R = np.array([[n[0]**2*(1-cosa)+cosa, n[0]*n[1]*(1-cosa)-n[2]*sina, n[0]*n[2]*(1-cosa)+n[1]*sina],
         #                [n[1]*n[0]*(1-cosa)+n[2]*sina, n[1]**2*(1-cosa)+cosa, n[1]*n[2]*(1-cosa)-n[0]*sina],
         #                [n[2]*n[1]*(1-cosa)-n[1]*sina, n[2]*n[1]*(1-cosa)+n[0]*sina, n[2]**2*(1-cosa)+cosa]])
@@ -153,42 +124,20 @@ class ChenCoeffsPython(chen_coeffs_abc.ChenCoeffsAbstract):
         #                [0,1,0]])
         # Note: The rotational matrix R is with respect to the sample which is R^T for the tip
         #       --> R to R^T for going from tip to sample, R^T to R for gradient
+        data[tunnelIdx][:noPoints]             = n[1]**2*(1-cosa)+cosa
+        data[tunnelIdx][noPoints:2*noPoints]   = n[2]*n[1]*(1-cosa)-n[0]*sina
+        data[tunnelIdx][2*noPoints:3*noPoints] = n[0]*n[1]*(1-cosa)+n[2]*sina
+        data[tunnelIdx][3*noPoints:4*noPoints] = n[1]*n[2]*(1-cosa)+n[0]*sina
+        data[tunnelIdx][4*noPoints:5*noPoints] = n[2]**2*(1-cosa)+cosa
+        data[tunnelIdx][5*noPoints:6*noPoints] = n[0]*n[2]*(1-cosa)-n[1]*sina
+        data[tunnelIdx][6*noPoints:7*noPoints] = n[1]*n[0]*(1-cosa)-n[2]*sina
+        data[tunnelIdx][7*noPoints:8*noPoints] = n[2]*n[0]*(1-cosa)+n[1]*sina
+        data[tunnelIdx][8*noPoints:9*noPoints] = n[0]**2*(1-cosa)+cosa
+        # rowIdx = [0,1,2,...,0,1,2,...,0,1,2,...]
+        rowIdx = np.tile(idxHelper,3)
+        # colIdx = [0,0,0,1,1,1,2,2,2,...]
+        colIdx = np.repeat(idxHelper,3)
 
-        # Flattened indices for p-orbitals
-        pxIdx = pointIdx
-        pyIdx = pointIdx+noPoints
-        pzIdx = pointIdx+2*noPoints
-
-        # Indices for large matrix
-        rowIdx[curIdx:curIdx+9] = [pxIdx, pxIdx, pxIdx, pyIdx, pyIdx, pyIdx, pzIdx, pzIdx, pzIdx]
-        colIdx[curIdx:curIdx+9] = [pxIdx, pyIdx, pzIdx, pxIdx, pyIdx, pzIdx, pxIdx, pyIdx, pzIdx]
-
-        for tunnelIdx in range(self.noTunnels):
-          # Reference vector
-          v = np.array([0.0, 0.0, -1.0])
-          v /= np.linalg.norm(v)
-          # Rotated vector
-          w = shiftedGrids[tunnelIdx][pointIdx]
-          w /= np.linalg.norm(w)
-          # Rotation axis (no rotation around x-y)
-          n = np.cross(v,w)
-          # Check if actually rotated
-          if not math.isclose(np.linalg.norm(n), 0.0):
-            n /= np.linalg.norm(n)
-            # Trigonometric values for rotation angle
-            cosa = np.dot(v,w)
-            sina = (1-cosa*cosa)**0.5
-            # Resulting matrix for p-orbitals: P^T * R^T * P
-            PtRtP = np.array([[n[1]**2*(1-cosa)+cosa, n[2]*n[1]*(1-cosa)-n[0]*sina, n[0]*n[1]*(1-cosa)+n[2]*sina], \
-                              [n[1]*n[2]*(1-cosa)+n[0]*sina, n[2]**2*(1-cosa)+cosa, n[0]*n[2]*(1-cosa)-n[1]*sina], \
-                              [n[1]*n[0]*(1-cosa)-n[2]*sina, n[2]*n[0]*(1-cosa)+n[1]*sina, n[0]**2*(1-cosa)+cosa]])
-          
-          else:
-            PtRtP = np.array([[1.0, 0.0, 0.0], \
-                              [0.0, 1.0, 0.0], \
-                              [0.0, 0.0, 1.0]])
-          data[tunnelIdx][curIdx:curIdx+9] = PtRtP.ravel()
-        curIdx += 9
       # Build large matrices
       for tunnelIdx in range(self.noTunnels):
         self._rotMatrix[tunnelIdx] = \
@@ -196,6 +145,6 @@ class ChenCoeffsPython(chen_coeffs_abc.ChenCoeffsAbstract):
                                        shape=(3*noPoints, 3*noPoints)))
 
     end = time.time()
-#    print("ChenCoeffs took {} seconds".format(end-start))
+    print("Rotational matrices took {} seconds".format(end-start))
 
 ################################################################################
