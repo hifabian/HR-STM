@@ -72,7 +72,6 @@ class WavefunctionHelp(wavefunction_abc.WavefunctionAbstract):
       self._wfn[1] = interp.gradient(*self._grids[gridIdx],1)
       self._wfn[2] = interp.gradient(*self._grids[gridIdx],2)
       self._wfn[3] = interp.gradient(*self._grids[gridIdx],3)
-    
     self._gridC, self._spinC, self._eigC = idxTupel
     return self._wfn
 

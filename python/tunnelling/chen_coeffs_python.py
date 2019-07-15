@@ -67,14 +67,12 @@ class ChenCoeffsPython(chen_coeffs_abc.ChenCoeffsAbstract):
       flatCoeffs = coeffs[1:4].ravel()
       # Provoke write into flat view instead of overwriting variable with [:]
       flatCoeffs[:] = self._rotMatrix[tunnelIdx]*coeffs[1:4].flatten()
-
     # Save some information
     self._coeffs = coeffs
     self._tunnelC, self._spinC, self._eigC = idxTuple
     return coeffs
 
   def setGrids(self, grids):
-#    self._grids = cp.deepcopy(grids)
     self._grids = grids
 
     # s-orbtial on tip only

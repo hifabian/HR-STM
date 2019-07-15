@@ -100,16 +100,14 @@ class HRSTM:
 
     dimGrid = self._tunnelMatrix.dimGrid
     # Currents for all bias voltages
-    self.localCurrent = np.zeros(dimGrid+(len(self._voltages),), \
+    self.localCurrent = np.zeros((len(self._voltages),)+dimGrid, \
       dtype=np.float64)
 
     # Over each separate tunnel process (e.g. to O- or C-atom)
     for tunnelIdx in range(self._chenCoeffs.noTunnels):
       for spinSamIdx in range(self._wfn.noSpins):
-        for esIdx in range(self._wfn.noEigs[spinSamIdx]):
-          eigSample = self._wfn.eigs[spinSamIdx][esIdx]
-          for spinTipIdx in range(self._chenCoeffs.noSpins):
-            eigsTip = self._chenCoeffs.eigs[spinTipIdx]
+        for esIdx, eigSample in enumerate(self._wfn.eigs[spinSamIdx]):
+          for spinTipIdx, eigsTip in enumerate(self._chenCoeffs.eigs):
             etIds = np.arange(len(eigsTip))
             vals = (eigsTip*eigSample > 0.0) \
               | ((eigSample <= 0.0) & (eigsTip == 0.0)) \
@@ -125,7 +123,8 @@ class HRSTM:
                 ene = voltage+eigTip-eigSample
                 if abs(ene) >= 4.0*self._sigma:
                   continue
-                self.localCurrent[...,volIdx] += np.sign(eigTip)*self._dos(ene) \
+                self.localCurrent[volIdx] += np.sign(eigTip)*self._dos(ene) \
                   * tunnelMatrixSquared
+    self.localCurrent = self.localCurrent.transpose((1,2,3,0))
 
 ################################################################################
