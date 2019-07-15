@@ -98,10 +98,14 @@ class ChenCoeffsPython(chen_coeffs_abc.ChenCoeffsAbstract):
           ).reshape(3,noPoints))
         data.append(np.empty(9*noPoints))
       # Sparse matrix storage as COO
-      rowIdx = np.empty(9*noPoints, dtype=int)
-      colIdx = np.empty(9*noPoints, dtype=int)
-
       idxHelper = np.arange(3*noPoints,dtype=int)
+      # rows = [0,1,2,...,0,1,2,...,0,1,2,...]
+      # cols = [0,0,0,1,1,1,2,2,2,...]
+      rowIdx = np.tile(idxHelper,3)
+      colIdx = np.repeat(idxHelper,3)
+      del idxHelper
+
+      # Matrix data
       for tunnelIdx in range(self.noTunnels):
         v = np.array([0.0,0.0,-1.0])
         # Rotated vector
@@ -131,11 +135,6 @@ class ChenCoeffsPython(chen_coeffs_abc.ChenCoeffsAbstract):
         data[tunnelIdx][6*noPoints:7*noPoints] = n[1]*n[0]*(1-cosa)-n[2]*sina
         data[tunnelIdx][7*noPoints:8*noPoints] = n[2]*n[0]*(1-cosa)+n[1]*sina
         data[tunnelIdx][8*noPoints:9*noPoints] = n[0]**2*(1-cosa)+cosa
-        # rowIdx = [0,1,2,...,0,1,2,...,0,1,2,...]
-        rowIdx = np.tile(idxHelper,3)
-        # colIdx = [0,0,0,1,1,1,2,2,2,...]
-        colIdx = np.repeat(idxHelper,3)
-      del idxHelper
 
       # Build large matrices
       for tunnelIdx in range(self.noTunnels):

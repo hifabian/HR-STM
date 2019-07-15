@@ -114,17 +114,16 @@ class HRSTM:
               | ((eigSample == 0.0) & (eigsTip <= 0.0))
             skip = True
             for voltage in self._voltages:
-              skip = skip & (np.abs(voltage-eigSample+eigsTip) >= 4.0*self._sigma)
+              skip &= (np.abs(voltage-eigSample+eigsTip) >= 4.0*self._sigma)
             for etIdx in [etIdx for etIdx in etIds[~(skip | vals)]]:
               eigTip = self._chenCoeffs.eigs[spinTipIdx][etIdx]
               tunnelMatrixSquared = (self._tunnelMatrix[tunnelIdx,spinTipIdx,etIdx, \
                 spinSamIdx,esIdx])**2
               for volIdx, voltage in enumerate(self._voltages):
                 ene = voltage+eigTip-eigSample
-                if abs(ene) >= 4.0*self._sigma:
-                  continue
-                self.localCurrent[volIdx] += np.sign(eigTip)*self._dos(ene) \
-                  * tunnelMatrixSquared
+                if abs(ene) < 4.0*self._sigma:
+                  self.localCurrent[volIdx] += np.sign(eigTip)*self._dos(ene) \
+                    * tunnelMatrixSquared
     self.localCurrent = self.localCurrent.transpose((1,2,3,0))
 
 ################################################################################
