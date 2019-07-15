@@ -115,13 +115,13 @@ class ChenCoeffsPython(chen_coeffs_abc.ChenCoeffsAbstract):
         cosa = np.dot(v,w)
         sina = (1-cosa**2)**0.5
 
-        #  R = np.array([[n[0]**2*(1-cosa)+cosa, n[0]*n[1]*(1-cosa)-n[2]*sina, n[0]*n[2]*(1-cosa)+n[1]*sina],
-        #                [n[1]*n[0]*(1-cosa)+n[2]*sina, n[1]**2*(1-cosa)+cosa, n[1]*n[2]*(1-cosa)-n[0]*sina],
-        #                [n[2]*n[1]*(1-cosa)-n[1]*sina, n[2]*n[1]*(1-cosa)+n[0]*sina, n[2]**2*(1-cosa)+cosa]])
+        #  R = [[n[0]**2*(1-cosa)+cosa, n[0]*n[1]*(1-cosa)-n[2]*sina, n[0]*n[2]*(1-cosa)+n[1]*sina],
+        #       [n[1]*n[0]*(1-cosa)+n[2]*sina, n[1]**2*(1-cosa)+cosa, n[1]*n[2]*(1-cosa)-n[0]*sina],
+        #       [n[2]*n[1]*(1-cosa)-n[1]*sina, n[2]*n[1]*(1-cosa)+n[0]*sina, n[2]**2*(1-cosa)+cosa]]
         # Permutation matrix for betas: (y,z,x) -> (x,y,z)
-        #  P = np.array([[0,0,1],
-        #                [1,0,0],
-        #                [0,1,0]])
+        #  P = [[0,0,1],
+        #       [1,0,0],
+        #       [0,1,0]]
         # Note: The rotational matrix R is with respect to the sample which is R^T for the tip
         #       --> R to R^T for going from tip to sample, R^T to R for gradient
         data[tunnelIdx][:noPoints]             = n[1]**2*(1-cosa)+cosa
@@ -137,6 +137,7 @@ class ChenCoeffsPython(chen_coeffs_abc.ChenCoeffsAbstract):
         rowIdx = np.tile(idxHelper,3)
         # colIdx = [0,0,0,1,1,1,2,2,2,...]
         colIdx = np.repeat(idxHelper,3)
+      del idxHelper
 
       # Build large matrices
       for tunnelIdx in range(self.noTunnels):

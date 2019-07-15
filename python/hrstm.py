@@ -109,30 +109,21 @@ class HRSTM:
         for esIdx in range(self._wfn.noEigs[spinSamIdx]):
           eigSample = self._wfn.eigs[spinSamIdx][esIdx]
           for spinTipIdx in range(self._chenCoeffs.noSpins):
-            for etIdx in range(self._chenCoeffs.noEigs[spinTipIdx]):
+            eigsTip = self._chenCoeffs.eigs[spinTipIdx]
+            etIds = np.arange(len(eigsTip))
+            vals = (eigsTip*eigSample > 0.0) \
+              | ((eigSample <= 0.0) & (eigsTip == 0.0)) \
+              | ((eigSample == 0.0) & (eigsTip <= 0.0))
+            skip = True
+            for voltage in self._voltages:
+              skip = skip & (np.abs(voltage-eigSample+eigsTip) >= 4.0*self._sigma)
+            for etIdx in [etIdx for etIdx in etIds[~(skip | vals)]]:
               eigTip = self._chenCoeffs.eigs[spinTipIdx][etIdx]
-              # Only if tip and sample are occupied/unoccupied
-              if eigTip*eigSample > 0.0 \
-                or (eigTip == 0.0 and eigSample <= 0.0) \
-                or (eigSample == 0.0 and eigTip <= 0.0):
-                continue
-
-              # Checking if density of states will be 0 anyway
-              skip = True
-              for voltage in self._voltages:
-                ene = voltage+eigTip-eigSample
-                if abs(ene) < 4.0*self._sigma:
-                  skip = False
-                  break
-              if skip:
-                continue
-
-              # Otherwise compute tunnelling matrix entry
               tunnelMatrixSquared = (self._tunnelMatrix[tunnelIdx,spinTipIdx,etIdx, \
                 spinSamIdx,esIdx])**2
               for volIdx, voltage in enumerate(self._voltages):
                 ene = voltage+eigTip-eigSample
-                if  abs(ene) >= 4.0*self._sigma:
+                if abs(ene) >= 4.0*self._sigma:
                   continue
                 self.localCurrent[...,volIdx] += np.sign(eigTip)*self._dos(ene) \
                   * tunnelMatrixSquared
