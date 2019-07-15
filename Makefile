@@ -64,4 +64,3 @@ TOAT_PDOS:
 
 clean:
 	rm -rf python/__pycache__ python/*/__pycache__
-	rm -f cpp/*.so
