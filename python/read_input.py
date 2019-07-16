@@ -28,12 +28,12 @@ def read_PPPos(filename):
     @return List of positions in shape of mgrid.
             Matrix containing information on the unrelaxed grid.
   """
-  disposX = np.transpose(np.load(filename+"_x.npy"))
-  disposY = np.transpose(np.load(filename+"_y.npy"))
-  disposZ = np.transpose(np.load(filename+"_z.npy"))
+  disposX = np.transpose(np.load(filename+"_x.npy")).copy()
+  disposY = np.transpose(np.load(filename+"_y.npy")).copy()
+  disposZ = np.transpose(np.load(filename+"_z.npy")).copy()
   # Information on the grid
   lvec = (np.load(filename+"_vec.npy"))
-  # Stack arrays to form 4-dimensional array of size [noX, noY, noZ, 3]
+  # Stack arrays to form 4-dimensional array of size [3, noX, noY, noZ]
   dispos = (disposX,disposY,disposZ)
 
   return dispos, lvec
