@@ -124,6 +124,7 @@ class HRSTM:
                 if abs(ene) < 4.0*self._sigma:
                   self.localCurrent[volIdx] += np.sign(eigTip)*self._dos(ene) \
                     * tunnelMatrixSquared
-    self.localCurrent = self.localCurrent.transpose((1,2,3,0))
+    # Copy to assure C-contiguous array
+    self.localCurrent = self.localCurrent.transpose((1,2,3,0)).copy()
 
 ################################################################################
