@@ -33,7 +33,7 @@ def apply_bounds(grid, lVec):
 # ==============================================================================
 
 
-def constCoeffs(eMin, eMax, de=0.1, s=0.0, py=0.0, pz=0.0, px=0.0):
+def const_coeffs(eMin, eMax, de=0.1, s=0.0, py=0.0, pz=0.0, px=0.0):
   """!
     @brief Creates coefficients for seperated tunneling to each orbital.
   """

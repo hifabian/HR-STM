@@ -252,26 +252,73 @@ args = comm.bcast(args, root=0)
 # ------------------------------------------------------------------------------
 
 # TODO Parallelization! Divide tip positions equally along x-direction to the
-#      processes.
+#      processes. Ideally this would be done while reading ;)
 
-tipPos = []
 
 start = time.time()
-for filename in args.tip_pos:
-  tmp, lVec = read_PPPos(filename)
-  # Restrict tip positions to cell box and store it
-  tipPos.append(apply_bounds(tmp,lVec))
-dim = np.shape(tipPos[0])[1:]
-# Metal tip (needed for rotation, no tunnelling considered)
-# NOTE Not needed after determining the rotational matrices!
-tipPos.insert(0, np.mgrid[ \
-  lVec[0,0]:lVec[0,0]+lVec[1,0]:dim[0]*1j, \
-  lVec[0,1]:lVec[0,1]+lVec[2,1]:dim[1]*1j, \
-  lVec[0,2]-args.tip_shift:lVec[0,2]+lVec[3,2]-args.tip_shift \
-  :dim[2]*1j])
+if rank == 0:
+  tipPosCmplt = []
+  for filename in args.tip_pos:
+    tmp, lVec = read_PPPos(filename)
+    # Restrict tip positions to cell box and store it
+#    tipPosCmplt.append(apply_bounds(tmp,lVec))
+    tipPosCmplt.append(tmp)
+  dim = np.shape(tipPosCmplt[0])[1:]
+  # Metal tip (needed for rotation, no tunnelling considered)
+  # NOTE Not needed after determining the rotational matrices!
+  tipPosCmplt.insert(0, np.mgrid[ \
+    lVec[0,0]:lVec[0,0]+lVec[1,0]:dim[0]*1j, \
+    lVec[0,1]:lVec[0,1]+lVec[2,1]:dim[1]*1j, \
+    lVec[0,2]-args.tip_shift:lVec[0,2]+lVec[3,2]-args.tip_shift \
+    :dim[2]*1j])
+  end = time.time()
+  # TODO these need to be evaluated across process!
+  # z-interval + safety bounds
+  # TODO xmin, xmax, ymin, ymax should consider all relaxed grids...
+  # I'm doing some re-computations with this evaluation region but it works
+  # fine, makes the parallelisation simpler and even avoids some bugs!
+  xmin = np.min(tipPosCmplt[-1][0])-args.dx
+  xmax = np.max(tipPosCmplt[-1][0])+args.dx
+  ymin = np.min(tipPosCmplt[-1][1])-args.dx
+  ymax = np.max(tipPosCmplt[-1][1])+args.dx
+  zmin = np.min(tipPosCmplt[-1][2])-args.dx
+  zmax = np.max(tipPosCmplt[1][2])+args.dx
+  evalRegion = np.array([[xmin,xmax], \
+                         [ymin,ymax], \
+                         [zmin,zmax]])
+#  evalRegion = np.array([[lVec[0,0],lVec[0,0]+lVec[1,0]], \
+#                         [lVec[0,1],lVec[0,1]+lVec[2,1]], \
+#                         [zmin,zmax]])
+else:
+  dim = None
+  lVec = None
+  evalRegion = None
+  tipPosCmplt = [[None]*3]*(len(args.tip_pos)+1)
+# Broadcast total dimension and lVec
+dim = comm.bcast(dim, root=0)
+lVec = comm.bcast(lVec, root=0)
+evalRegion = comm.bcast(evalRegion, root=0)
+# x-indices on each rank
+allXIds = np.array_split(np.arange(dim[0]), size)
+# Information on split sizes
+lengths = [len(allXIds[rank])*dim[1]*dim[2] for rank in range(size)]
+offsets = [allXIds[rank][0]*dim[1]*dim[2] for rank in range(size)]
+# Storage
+dimLocal = (len(allXIds[rank]),)+dim[1:]
+tipPos = [np.empty((3,)+dimLocal) for idx in range(len(args.tip_pos)+1)]
+for posIdx in range(len(args.tip_pos)+1):
+  # Split tip positions for (x,y,z) separately
+  for axis in range(3):
+    comm.Scatterv([tipPosCmplt[posIdx][axis], lengths, offsets, MPI.DOUBLE], \
+      tipPos[posIdx][axis], root=0)
+
 end = time.time()
 print("Reading tip positions in {} seconds for rank {}.".format(end-start, \
   rank))
+
+print(rank, np.min(tipPos[0][0]), np.max(tipPos[0][0]), np.mean(tipPos[0][0]), np.shape(tipPos[0][0]))
+print(rank, np.min(tipPos[2][0]), np.max(tipPos[1][0]), np.mean(tipPos[1][0]), np.shape(tipPos[1][0]))
+print(rank, np.min(tipPos[1][0]), np.max(tipPos[2][0]), np.mean(tipPos[2][0]), np.shape(tipPos[2][0]))
 
 # ------------------------------------------------------------------------------
 # READ AND EVALUATE CHEN'S COEFFICIENTS
@@ -287,7 +334,7 @@ if rank == 0: # Functions called here only support single process!
   idx = 0 # Index of input argument
   while idx < len(args.pdos_list):
     try:
-      chenSingle, eigsTip = constCoeffs(minETip, maxETip,
+      chenSingle, eigsTip = const_coeffs(minETip, maxETip,
         s=float(args.pdos_list[idx]), \
         py=float(args.pdos_list[idx+1]), \
         pz=float(args.pdos_list[idx+2]), \
@@ -318,15 +365,10 @@ print("Reading tip coefficients in {} seconds for rank {}.".format(end-start, \
 # TODO determine extrapolation plane!
 #args.extrap_dist
 args.extrap_extent = 0
+  
 
-# TODO these need to be evaluated across process!
-# z-interval + safety bounds
-zmin = np.min(tipPos[-1][2])-args.dx
-zmax = np.max(tipPos[1][2])+args.dx
-evalRegion = np.array([[lVec[0,0],lVec[0,0]+lVec[1,0]], \
-                       [lVec[0,1],lVec[0,1]+lVec[2,1]], \
-                       [zmin,zmax]])
 print("CP2K Evaluation Region:\n", evalRegion)
+
 
 start = time.time()
 # Set up CP2K wave function object
@@ -343,6 +385,8 @@ wfn.calc_morbs_in_region(args.dx,
   z_eval_region=evalRegion[2]*ang2bohr,
   reserve_extrap = args.extrap_extent,
   eval_cutoff = args.rcut)
+dv = wfn.dv / ang2bohr
+print(wfn.dv, dv)
 end = time.time()
 print("Building CP2K wave function matrix in {} seconds for rank {}.".format( \
   end-start, rank))
@@ -366,12 +410,58 @@ print("Extrapolating CP2K wave function matrix in {} seconds for rank {}."\
 # CREATE WAVE FUNCTION OBJECT (WRAPPER)
 # ------------------------------------------------------------------------------
 
+# TODO Just do it here for now, then pack it into a function.
+# TODO I need to, determine which rank needs which region and from whom it gets
+#      which orbitals.
+#      For the dimension, the easiest thing to do is look at the wfnMatrix size,
+#      while the grid is defined by evalRegion. What is needed by which rank is
+#      given through xmin, xmax evaluated locally (z and y are complete!).
+#      Restrict xmin, xmax to region should give the index (floor, ceil).
+#      For the energies, first assemble all energies bla bla (do what K does)
+eigsSam = []
+wfnMatrix = []
+ase_atoms = wfn.ase_atoms
+for spinIdx in range(wfn.nspin):
+  # Gather eigen energies of sample
+  tmp = comm.allgather(wfn.morb_energies[spinIdx])
+  noEigsByRank = np.array([len(val) for val in tmp])
+  eigsSam.append(np.hstack(tmp))
+  del tmp
+
+  # Indices needed for the tip position on this process
+  xIds = np.array([ \
+    np.floor((np.min(tipPos[-1][0])-evalRegion[0][0]) / dv[0]), \
+    np.ceil((np.max(tipPos[-1][0])-evalRegion[0][0]) / dv[0])], \
+    dtype=int)
+  xIdsAll = comm.allgather(xIds)
+  # Dimension of local grid for wave function matrix
+  wfnDimLocal = (xIds[1]-xIds[0]+1,)+np.shape(wfn.morb_grids[spinIdx])[2:]
+  noPoints = np.product(wfnDimLocal)
+  print(rank, noPoints, wfnDimLocal)
+  # Gather the necessary stuff
+  for r in range(size):
+    if rank == r:
+      recvbuf = np.empty(len(eigsSam[spinIdx])*noPoints, dtype=wfn.morb_grids[spinIdx][spinIdx].dtype)
+    else:
+      recvbuf = None
+    sendbuf = wfn.morb_grids[spinIdx][:,xIdsAll[r][0]:xIdsAll[r][1]+1].ravel()
+    comm.Gatherv(sendbuf=sendbuf, recvbuf=[recvbuf,noEigsByRank*noPoints], root=r)
+    if rank == r:
+      wfnMatrix.append(recvbuf.reshape((len(eigsSam[spinIdx]),)+wfnDimLocal))
+# Free memory by deleting large unnecessary things
+del wfn
+# Divide grids by space rather than by eigen energies, then free some memory
+#del wfn
 # TODO Parallelization! Use the tip position on each rank to determine the
 #      necessary values from wave function matrix and then request it.
 #      (Create a shared vector with information what each process needs, then
 #       send the chunks according to this vector! (Note: Only along x-axis)
-wfnSam = WavefunctionHelp(eigs=wfn.morb_energies, atoms=wfn.ase_atoms, \
-  noOrbsTip=args.orbs_tip, wfnMatrix=wfn.morb_grids, evalRegion=evalRegion)
+# TODO let's move this into HRSTM eventually!
+# TODO evalRegion is incorrect with the parallelization
+evalRegionLocal = evalRegion
+evalRegionLocal[0] = evalRegion[0][0]+xIds*dv[0]
+wfnSam = WavefunctionHelp(eigs=eigsSam, atoms=ase_atoms, \
+  noOrbsTip=args.orbs_tip, wfnMatrix=wfnMatrix, evalRegion=evalRegionLocal)
 wfnSam.setGrids(tipPos[1:])
 
 # ==============================================================================
@@ -382,22 +472,29 @@ wfnSam.setGrids(tipPos[1:])
 
 # TODO (use the python one, slow on this machine but I believe it's just as fast
 #       on daint)
+if rank == 0:
+  # Meta information
+  meta = {'dimGrid' : np.shape(tipPos[0])[:-1], \
+          'lVec' : lVec, \
+          'voltages' : args.voltages, \
+  }
+  np.save(args.output+"_meta.npy", meta)
 
 start = time.time()
 hrstm = HRSTM(chenCoeffs, wfnSam, args.fwhm, \
-  rank, size, comm)
+  rank, size, comm, dim)
 del tipPos
 hrstm.run(args.voltages)
+current = hrstm.gather()
+if rank == 0:
+  np.savez_compressed(args.output, current.ravel())
+
 end = time.time()
 print("Evaluating HRSTM-run method in {} seconds.".format(end-start))
 
 print(np.shape(hrstm.localCurrent))
-import matplotlib.pyplot as plt
-plt.figure()
-plt.imshow(hrstm.localCurrent[:,:,0,0])
-plt.show()
-
-
-endTotal = time.time()
-print("Total time was {} seconds for rank {}.".format(endTotal-startTotal, \
-  rank))
+if rank == 0:
+  import matplotlib.pyplot as plt
+  plt.figure()
+  plt.imshow(current[:,:,3,0], cmap="gist_gray")
+  plt.show()

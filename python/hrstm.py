@@ -1,6 +1,8 @@
 # @author Hillebrand, Fabian
 # @date   2019
 
+import time
+
 import numpy as np
 
 from basis.wavefunction_abc import *
@@ -21,7 +23,7 @@ class HRSTM:
           array along the x-direction only.
   """
 
-  def __init__(self, chenCoeffs, wfn, fwhm, rank, size, comm):
+  def __init__(self, chenCoeffs, wfn, fwhm, rank, size, comm, dimGrid):
     """!
       @brief Initiator
 
@@ -38,6 +40,7 @@ class HRSTM:
     self._rank = rank
     self._size = size
     self._comm = comm
+    self._dimGrid = dimGrid
 
   ##############################################################################
   def _compute(self):
@@ -57,7 +60,13 @@ class HRSTM:
     """!
       @brief Gathers the current and returns it on rank 0.
     """
-    pass
+    if self._rank == 0:
+      current = np.empty(self._dimGrid+(len(self._voltages),))
+    else:
+      current = None
+    outputSizes = self._comm.allgather(len(self.localCurrent.ravel()))
+    self._comm.Gatherv(self.localCurrent, [current, outputSizes], root=0)
+    return current
 
   def write(self, filename):
     """!
@@ -104,6 +113,8 @@ class HRSTM:
       dtype=np.float64)
 
     # Over each separate tunnel process (e.g. to O- or C-atom)
+    totTM = 0.0
+    totVL = 0.0
     for tunnelIdx in range(self._chenCoeffs.noTunnels):
       for spinSamIdx in range(self._wfn.noSpins):
         for esIdx, eigSample in enumerate(self._wfn.eigs[spinSamIdx]):
@@ -117,14 +128,22 @@ class HRSTM:
               skip &= (np.abs(voltage-eigSample+eigsTip) >= 4.0*self._sigma)
             for etIdx in [etIdx for etIdx in etIds[~(skip | vals)]]:
               eigTip = self._chenCoeffs.eigs[spinTipIdx][etIdx]
+              start = time.time()
               tunnelMatrixSquared = (self._tunnelMatrix[tunnelIdx,spinTipIdx,etIdx, \
                 spinSamIdx,esIdx])**2
+              end = time.time()
+              totTM += end-start
+              start = time.time()
               for volIdx, voltage in enumerate(self._voltages):
                 ene = voltage+eigTip-eigSample
                 if abs(ene) < 4.0*self._sigma:
                   self.localCurrent[volIdx] += np.sign(eigTip)*self._dos(ene) \
                     * tunnelMatrixSquared
+              end = time.time()
+              totVL += end-start
     # Copy to assure C-contiguous array
     self.localCurrent = self.localCurrent.transpose((1,2,3,0)).copy()
+    print("Total time for tunneling matrix was {:} seconds.".format(totTM))
+    print("Total time for voltage loop was {:} seconds.".format(totVL))
 
 ################################################################################
