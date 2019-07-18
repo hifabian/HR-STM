@@ -69,6 +69,6 @@ class TunnelMatrix():
     # Compute tunnel matrix element and return
     return np.einsum("o...,o...->...", \
       self.chenCoeffs[tunnelIdx,spinTipIdx,eTipIdx], \
-      self.wfn[tunnelIdx,spinSamIdx,eSamIdx], optimize=True)
+      self.wfn[tunnelIdx,spinSamIdx,eSamIdx])
 
 ################################################################################
