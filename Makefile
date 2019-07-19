@@ -18,11 +18,11 @@ RUN=mpirun -np 3 python3 -m mpi4py run.py
 # ==============================================================================
 
 TOAT_ARGS= $(RUN) \
-	--cp2k_input $(SAMPLE)/TOAT/sample.inp \
-	--basis_sets $(SAMPLE)/BASIS_MOLOPT \
-	--xyz $(SAMPLE)/TOAT/sample.xyz \
-	--coeffs $(SAMPLE)/TOAT/SAMPLE-RESTART.wfn \
-	--tip_pos $(SAMPLE)/TOAT/Qo-0.12Qc0.07K0.11/PPpos \
+	--cp2k_input_file $(SAMPLE)/TOAT/sample.inp \
+	--basis_set_file $(SAMPLE)/BASIS_MOLOPT \
+	--xyz_file $(SAMPLE)/TOAT/sample.xyz \
+	--wfn_file $(SAMPLE)/TOAT/SAMPLE-RESTART.wfn \
+	--tip_pos_files $(SAMPLE)/TOAT/Qo-0.12Qc0.07K0.11/PPpos \
 			  $(SAMPLE)/TOAT/Qo-0.12Qc0.07K0.11/PPdisp \
 	--tip_shift -3.0 \
 	--orbs_tip 1 \
