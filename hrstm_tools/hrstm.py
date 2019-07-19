@@ -42,6 +42,8 @@ class Hrstm:
         """
         Gathers the current and returns it on rank 0.
         """
+        if self.mpi_comm is None:
+            return self.local_current
         if self.mpi_rank == 0:
             current = np.empty(self._tip_grid_dim_all+(len(self._voltages),))
         else:

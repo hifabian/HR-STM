@@ -63,8 +63,13 @@ class TipCoefficients:
         shape (s, py, pz, px, de).
         Coefficients are broadcasted to all MPI processes.
         """
-        self.norbs = norbs
+        self._norbs = norbs
+        self._singles = None
+        self._ene = None
+        self._grid_dim = None
+        self._ntunnels = None
         self._coeffs = None
+        # Read untransformed tip coefficients and energies
         if self.mpi_rank == 0:
             self._singles = []
             idx = 0 # Index of input argument
@@ -86,13 +91,10 @@ class TipCoefficients:
                             single[ispin][:,:(self.norbs+1)**2]**0.5
                     idx += 1
                 self._singles.append(single)
-        else:
-          self._singles = None
-          self._ene = None
         # Broadcast untransformed coefficients and energies
         if self.mpi_comm is not None:
-          self._singles = self.mpi_comm.bcast(self._singles, root=0)
-          self._ene = self.mpi_comm.bcast(self._ene, root=0)
+            self._singles = self.mpi_comm.bcast(self._singles, root=0)
+            self._ene = self.mpi_comm.bcast(self._ene, root=0)
 
 
     ### ------------------------------------------------------------------------
@@ -106,7 +108,7 @@ class TipCoefficients:
         before hand to avoid unnecessary calculations.
         """
         self._grid_dim = np.shape(pos[0])[1:]
-        self.ntunnels = len(pos)-1
+        self._ntunnels = len(pos)-1
         # s-orbtial on tip only
         if self.norbs == 0:
             return
@@ -182,10 +184,28 @@ class TipCoefficients:
 
     @property
     def ene(self):
+        """ List of energies per spin. """
         return self._ene
     @property
+    def singles(self):
+        """ Untransformed coefficients. """
+        return self._singles
+    @property
     def grid_dim(self):
-      return self._grid_dim
+        """ Dimension of grid for tip positions. """
+        return self._grid_dim
+    @property
+    def norbs(self):
+        """ Number of tip orbitals. """
+        return self._norbs
+    @property
+    def nspin(self):
+        """ Number of spins. """
+        return len(self.ene)
+    @property
+    def ntunnels(self):
+        """ Number of tunnellings. """
+        return self._ntunnels
 
     def __getitem__(self, ituple):
         """ @param ituple Index tuple (itunnel,ispin,iene) """
@@ -203,9 +223,9 @@ class TipCoefficients:
         self._coeffs[0].fill(self._singles[itunnel][ispin][iene,0])
         if self.norbs > 0:
             # p-orbitals: Are rotated like vectors
-            self._coeffs[1].fill(self._singles[itunnel][ispin][iene,1])
-            self._coeffs[2].fill(self._singles[itunnel][ispin][iene,2])
-            self._coeffs[3].fill(self._singles[itunnel][ispin][iene,3])
+            self._coeffs[1].fill(self.singles[itunnel][ispin][iene,1])
+            self._coeffs[2].fill(self.singles[itunnel][ispin][iene,2])
+            self._coeffs[3].fill(self.singles[itunnel][ispin][iene,3])
             # Flat view of coeffs[1:4]
             flat_coeffs = self._coeffs[1:4].ravel()
             # Provoke write into flat view instead of overwriting variable with [:]

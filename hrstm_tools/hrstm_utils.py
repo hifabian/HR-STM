@@ -143,7 +143,7 @@ def read_tip_positions(files, shift, dx, mpi_rank=0, mpi_size=1, mpi_comm=None):
         sam_eval_region = np.array([[xmin,xmax], [ymin,ymax], [zmin,zmax]])
         # No MPI
         if mpi_comm is None:
-          return tip_all, grid_dim, sam_eval_region, lVec
+            return pos_all, grid_dim, sam_eval_region, lVec
     else:
         pos_all = [[None]*3]*(len(files)+1)
         lVec = None

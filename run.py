@@ -249,6 +249,7 @@ start = time.time()
 sam_grid_matrix = cgm.Cp2kGridMatrix(sam_grid_orb, sam_eval_region, tip_pos[1:],
     args.orbs_tip, mpi_rank, mpi_size, mpi_comm)
 del sam_grid_orb, tip_pos
+sam_grid_matrix.divide()
 end = time.time()
 print("Setting up wave function object in {} seconds for rank {}."\
     .format(end-start, mpi_rank))
@@ -270,11 +271,11 @@ hrstm.run(args.voltages)
 # TODO write within the class
 current = hrstm.gather()
 if mpi_rank == 0:
-  import matplotlib.pyplot as plt
-  plt.figure()
-  plt.imshow(abs(current[:,:,3,0]).T,cmap='gist_gray')
-  plt.show()
-#  np.savez_compressed(args.output, current.ravel())
+#    import matplotlib.pyplot as plt
+#    plt.figure()
+#    plt.imshow(abs(current[:,:,3,0]).T,cmap='gist_gray')
+#    plt.show()
+    np.savez_compressed(args.output, current.ravel())
 end = time.time()
 print("Evaluating HRSTM-run method in {} seconds for rank {}.".format(end-start, 
     mpi_rank))
