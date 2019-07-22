@@ -268,14 +268,7 @@ start = time.time()
 hrstm = hs.Hrstm(tip_coeffs, tip_grid_dim_all, sam_grid_matrix, args.fwhm, \
   mpi_rank, mpi_size, mpi_comm)
 hrstm.run(args.voltages)
-# TODO write within the class
-current = hrstm.gather()
-if mpi_rank == 0:
-#    import matplotlib.pyplot as plt
-#    plt.figure()
-#    plt.imshow(abs(current[:,:,3,0]).T,cmap='gist_gray')
-#    plt.show()
-    np.savez_compressed(args.output, current.ravel())
+hrstm.write_compressed(args.output)
 end = time.time()
 print("Evaluating HRSTM-run method in {} seconds for rank {}.".format(end-start, 
     mpi_rank))

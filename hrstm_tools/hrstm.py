@@ -77,7 +77,13 @@ class Hrstm:
         @param tol      Relative toleranz to the maximum for a height 
                         and voltage.
         """
-        pass
+        current = self.gather()
+        if self.mpi_rank == 0:
+            for iheight in range(self._tip_grid_dim_all[-1]):
+                for ivol in range(len(self._voltages)):
+                    max_val = np.max(np.abs(current[:,:,iheight,ivol]))
+                    current[:,:,iheight,ivol][np.abs(current[:,:,iheight,ivol]) < max_val*tol] = 0.0
+            np.savez_compressed(filename, current.ravel())
 
 
     ### ------------------------------------------------------------------------
