@@ -29,21 +29,46 @@ class Cp2kGridMatrix:
         self._ene = cp2k_grid_orb.morb_energies
         self._wfn_matrix = cp2k_grid_orb.morb_grids
         self._wfn_dim = np.shape(self.wfn_matrix[0])[1:]
-        self.eval_region = eval_region
-        self.eval_region_local = eval_region
-        self._reg_grid = ( \
-            np.linspace(self.eval_region_local[0][0],
-                        self.eval_region_local[0][1],self.wfn_dim[0]),
-            np.linspace(self.eval_region_local[1][0],
-                        self.eval_region_local[1][1],self.wfn_dim[1]),
-            np.linspace(self.eval_region_local[2][0],
-                        self.eval_region_local[2][1],self.wfn_dim[2]))
+        # TODO eval_region should provide the evaluation region used for the whole matrix
+        #      whereas eval_region_local explcitily what is on this process. This includes wrapping!
+        #      for no mpi, the matrix should still be wrapped, i.e. a function call should be made
+        self._eval_region = eval_region
+        self._eval_region_local = self.eval_region
+        self._reg_grid = None
         self._ase_atoms = cp2k_grid_orb.ase_atoms
         self._dv = cp2k_grid_orb.dv / ang2bohr
         self._nspin = cp2k_grid_orb.nspin
         # Storage for computed wave function on evaluation grid
         self._wfn = None
         self._divide_flag = False
+
+
+    def _get_slice(cls, wm, ids, axis):
+        """
+        Cuts a semi-periodic function defined on a grid according to the 
+        indices along the specified axis. The indices are contiguous and
+        represent by a tuple (imin, imax) (inclusive).
+        """
+        axis += 1
+        dim = np.shape(wm)[axis]
+        slice0 = [slice(None)]*wm.ndim
+        slice1 = [slice(None)]*wm.ndim
+        if ids[0] < 0:
+            slice0[axis] = slice(ids[0],None)
+            if ids[1] >= dim:
+                slice1[axis] = slice(None,ids[1]-dim+1)
+                return np.concatenate([wm[tuple(slice0)],wm,wm[tuple(slice1)]], axis=axis)
+            else:
+                slice1[axis] = slice(None,ids[1]+1)
+                return np.concatenate([wm[tuple(slice0)],wm[tuple(slice1)]], axis=axis)
+        elif ids[1] >= dim:
+            slice0[axis] = slice(ids[0],None)
+            slice1[axis] = slice(None, ids[1]-dim+1)
+            return np.concatenate([wm[tuple(slice0)],wm[tuple(slice1)]], axis=axis)
+        else:
+            slice0[axis] = slice(ids[0],ids[1]+1)
+            return wm[tuple(slice0)]
+
 
     def divide(self):
         """
@@ -52,45 +77,57 @@ class Cp2kGridMatrix:
         must not be called twice.
         """
         if self._divide_flag:
-          raise AssertionError("Tried to call Cp2kGridMatrix.divide() twice!")
+            raise AssertionError("Tried to call Cp2kGridMatrix.divide() twice!")
         self._divide_flag = True
-
-        ene = []
-        wfn_matrix = []
-        # Distribute and gather energies and wave functions on MPI ranks
+        # Index range needed by this rank (inclusive)
+        isx = np.array([\
+              np.floor(min([np.min(pos[0]-self.eval_region[0][0])
+                            for pos in self.grids]) / self._dv[0]),
+              np.ceil( max([np.max(pos[0]-self.eval_region[0][0])
+                            for pos in self.grids]) / self._dv[0]),
+              ], dtype=int)
+        isy = np.array([\
+              np.floor(min([np.min(pos[1]-self.eval_region[1][0])
+                            for pos in self.grids]) / self._dv[1]),
+              np.ceil( max([np.max(pos[1]-self.eval_region[1][0])
+                            for pos in self.grids]) / self._dv[1]),
+              ], dtype=int)
+        if self.mpi_comm is None:
+            wfn_matrix = [self._get_slice(self.wfn_matrix[ispin],isx,0) for ispin in \
+                range(self.nspin)]
+        else:
+            ene = []
+            wfn_matrix = []
+            # Distribute and gather energies and wave functions on MPI ranks
+            for ispin in range(self.nspin):
+                # Gather energies
+                ene_separated = self.mpi_comm.allgather(self.ene[ispin])
+                nene_by_rank = np.array([len(val) for val in ene_separated])
+                ene.append(np.hstack(ene_separated))
+                # Indices needed for the tip position on MPI rank
+                isx_all = self.mpi_comm.allgather(isx)
+                # Dimension of local grid for wave function matrix
+                wfn_dim_local = (isx[1]-isx[0]+1,)+self.wfn_dim[1:]
+                npoints = np.product(wfn_dim_local)
+                # Gather the necessary stuff
+                for rank in range(self.mpi_size):
+                    if self.mpi_rank == rank:
+                        recvbuf = np.empty(len(ene[ispin])*npoints)
+                    else:
+                        recvbuf = None
+                    sendbuf = np.array(self._get_slice(self.wfn_matrix[ispin],isx_all[rank],0),order='C').ravel()
+                    self.mpi_comm.Gatherv(sendbuf=sendbuf, recvbuf=[recvbuf,
+                        nene_by_rank*npoints], root=rank)
+                    if self.mpi_rank == rank:
+                        wfn_matrix.append(recvbuf.reshape(
+                            (len(ene[ispin]),) + wfn_dim_local))
+            self._ene = ene
+        self._wfn_matrix = []
         for ispin in range(self.nspin):
-            # Gather energies
-            ene_separated = self.mpi_comm.allgather(self.ene[ispin])
-            nene_by_rank = np.array([len(val) for val in ene_separated])
-            ene.append(np.hstack(ene_separated))
-            # Indices needed for the tip position on MPI rank
-            isx = np.array([\
-                np.floor(min([np.min(pos[0]-self.eval_region[0][0]) 
-                              for pos in self.grids]) / self._dv[0]),
-                 np.ceil(max([np.max(pos[0]-self.eval_region[0][0]) 
-                              for pos in self.grids]) / self._dv[0]),
-                ], dtype=int)
-            isx_all = self.mpi_comm.allgather(isx)
-            # Dimension of local grid for wave function matrix
-            wfn_dim_local = (isx[1]-isx[0]+1,)+self.wfn_dim[1:]
-            npoints = np.product(wfn_dim_local)
-            # Gather the necessary stuff
-            for rank in range(self.mpi_size):
-                if self.mpi_rank == rank:
-                    recvbuf = np.empty(len(ene[ispin])*npoints)
-                else:
-                    recvbuf = None
-                sendbuf = self._wfn_matrix[ispin]\
-                    [:,isx_all[rank][0]:isx_all[rank][1]+1].ravel()
-                self.mpi_comm.Gatherv(sendbuf=sendbuf, recvbuf=[recvbuf,
-                    nene_by_rank*npoints], root=rank)
-                if self.mpi_rank == rank:
-                    wfn_matrix.append(recvbuf.reshape(
-                        (len(ene[ispin]),) + wfn_dim_local))
-        self._ene = ene
-        self._wfn_matrix = wfn_matrix
+            self._wfn_matrix.append(self._get_slice(wfn_matrix[ispin],isy,1))
         # Set evaluation region for this MPI rank
-        self.eval_region_local[0] = self.eval_region[0][0]+isx*self._dv[0]
+        self._eval_region_local[0] = self.eval_region[0][0]+isx*self._dv[0]
+        self._eval_region_local[1] = self.eval_region[1][0]+isy*self._dv[1]
         self._wfn_dim = np.shape(self.wfn_matrix[0])[1:]
         self._reg_grid = ( \
             np.linspace(self.eval_region_local[0][0],
@@ -113,6 +150,14 @@ class Cp2kGridMatrix:
     def wfn_matrix(self):
         """ Underlying matrix defined on a regular grid. """
         return self._wfn_matrix
+    @property
+    def eval_region_local(self):
+        """ Evaluation grid of local wave funtion matrix. """
+        return self._eval_region_local
+    @property
+    def eval_region(self):
+        """ Evaluation grid of complete wave function matrix. """
+        return self._eval_region
     @property
     def reg_grid(self):
         """ Regular grid where wave function matrix is defined on. """

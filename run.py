@@ -224,8 +224,6 @@ sam_grid_orb.read_basis_functions(args.basis_set_file)
 sam_grid_orb.load_restart_wfn_file(args.wfn_file,
     emin=args.emin-2.0*args.fwhm, emax=args.emax+2.0*args.fwhm)
 sam_grid_orb.calc_morbs_in_region(args.dx,
-    x_eval_region=sam_eval_region[0]*ang2bohr,
-    y_eval_region=sam_eval_region[1]*ang2bohr,
     z_eval_region=sam_eval_region[2]*ang2bohr,
     reserve_extrap = args.extrap_dist,
     eval_cutoff = args.rcut)

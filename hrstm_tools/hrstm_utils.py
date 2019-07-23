@@ -133,11 +133,11 @@ def read_tip_positions(files, shift, dx, mpi_rank=0, mpi_size=1, mpi_comm=None):
             lVec[0,1]:lVec[0,1]+lVec[2,1]:grid_dim[1]*1j, \
             lVec[0,2]-shift:lVec[0,2]+lVec[3,2]-shift \
             :grid_dim[2]*1j])
-        # Evaluation region for sample (with safety bounds)
-        xmin = min([np.min(pos[0]) for pos in pos_all[1:]])-dx/2
-        xmax = max([np.max(pos[0]) for pos in pos_all[1:]])+dx/2
-        ymin = min([np.min(pos[1]) for pos in pos_all[1:]])-dx/2
-        ymax = max([np.max(pos[1]) for pos in pos_all[1:]])+dx/2
+        # Evaluation region for sample (x,y periodic)
+        xmin = lVec[0,0]
+        xmax = lVec[0,0]+lVec[1,0]
+        ymin = lVec[0,1]
+        ymax = lVec[0,1]+lVec[2,1]
         zmin = min([np.min(pos[2]) for pos in pos_all[1:]])-dx/2
         zmax = max([np.max(pos[2]) for pos in pos_all[1:]])+dx/2
         sam_eval_region = np.array([[xmin,xmax], [ymin,ymax], [zmin,zmax]])
