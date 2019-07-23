@@ -174,9 +174,18 @@ parser.add_argument('--fwhm',
 ### ----------------------------------------------------------------------------
 
 args = None
-if mpi_rank == 0:
-    args = parser.parse_args()
+args_success = False
+try:
+    if mpi_rank == 0:
+        args = parser.parse_args()
+        args_success = True
+finally:
+    args_success = mpi_comm.bcast(args_success, root=0)
+if not args_success:
+  raise ImportError("Failed to read input arguments.")
+
 args = mpi_comm.bcast(args, root=0)
+
 
 ### ----------------------------------------------------------------------------
 ### Read tip positions on ranks
