@@ -2,7 +2,7 @@
 import sys
 import os
 # Include directory
-sys.path.append(os.path.dirname(os.path.realpath(__file__))+"/../python/")
+sys.path.append(os.path.dirname(os.path.realpath(__file__))+"/../")
 
 import numpy as np
 import scipy.interpolate as si
@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 from timeit import timeit
 
-from basis.interpolator2 import Interpolator
+from hrstm_tools.interpolator import Interpolator
 
 
 def Fz(x,y,z):
@@ -40,9 +40,7 @@ def benchmark(N, xTest, yTest, zTest, wTest):
   print("Scipy:\t\t{:} seconds".format(timeit(lambda: linInp(np.array([xTest,yTest,zTest]).transpose()), number=100)))
   print("Linear:\t\t{:} seconds".format(timeit(lambda: ownInp(*(xTest,yTest,zTest)), number=100)))
   print("Derivative:\t{:} seconds".format(timeit(lambda: graInp.gradient(*(xTest,yTest,zTest,1)), number=100)))
-  print("Derivative:\t{:} seconds".format(timeit(lambda: graInp.gradient2(*(xTest,yTest,zTest,1)), number=100)))
   print("Derivative:\t{:} seconds".format(timeit(lambda: gr2Inp.gradient(*(xTest,yTest,zTest,3)), number=100)))
-  print("Derivative:\t{:} seconds".format(timeit(lambda: gr2Inp.gradient2(*(xTest,yTest,zTest,3)), number=100)))
 
   """
   xRef = np.linspace(0.123,0.9,int(N*np.pi))
@@ -70,12 +68,10 @@ def benchmark(N, xTest, yTest, zTest, wTest):
   """
 
   return [ 
-#          np.linalg.norm(linInp(np.array([xTest,yTest,zTest]).transpose())-wTest) / wNorm,
-#          np.linalg.norm(ownInp(*(xTest,yTest,zTest))-wTest) / wNorm,
+          np.linalg.norm(linInp(np.array([xTest,yTest,zTest]).transpose())-wTest) / wNorm,
+          np.linalg.norm(ownInp(*(xTest,yTest,zTest))-wTest) / wNorm,
           np.linalg.norm(graInp.gradient(*(xTest,yTest,zTest),1)-wTest) / wNorm,
-          np.linalg.norm(graInp.gradient2(*(xTest,yTest,zTest),1)-wTest) / wNorm,
-          np.linalg.norm(gr2Inp.gradient(*(xTest,yTest,zTest),3)-wTest) / wNorm,
-          np.linalg.norm(gr2Inp.gradient2(*(xTest,yTest,zTest),3)-wTest) / wNorm]
+          np.linalg.norm(gr2Inp.gradient(*(xTest,yTest,zTest),3)-wTest) / wNorm]
 
 
 xTest = np.sort(np.random.random(100))
@@ -92,9 +88,10 @@ for N in n:
 
 res = np.array(res)
 labels = [
-#  "$\mathcal{I}(f)$", \
-  "$\partial_x\mathcal{I}(f)$", "FD$_x$+SciPy",
-  "$\partial_z\mathcal{I}(f)$", "FD$_z$+SciPy"]
+  "$\mathcal{I}(f)$", \
+  "$\mathcal{I}(f)$", \
+  "$\partial_x\mathcal{I}(f)$", #"FD$_x$+SciPy",
+  "$\partial_z\mathcal{I}(f)$"]#, "FD$_z$+SciPy"]
 
 plt.figure()
 for i in range(np.shape(res)[1]):
