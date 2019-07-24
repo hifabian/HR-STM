@@ -6,7 +6,7 @@ away from surface.
 
 # HR-STM Simulation
 
-This repository provides an implementation of high resolution scanning tunnelling 
+This repository provides an implementation of high-resolution scanning tunnelling 
 microscopy (HR-STM) simulations.
 The method is based on the works of Bardeen (Bardeen`s Tunnelling Theory), Chen 
 (Derivative Rule) and Hapala et al. (Probe Particle Model).
