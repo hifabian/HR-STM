@@ -22,8 +22,6 @@ TOAT_ARGS= $(RUN) \
 	--basis_set_file $(SAMPLE)/BASIS_MOLOPT \
 	--xyz_file $(SAMPLE)/TOAT/sample.xyz \
 	--wfn_file $(SAMPLE)/TOAT/SAMPLE-RESTART.wfn \
-	--tip_pos_files $(SAMPLE)/TOAT/Qo-0.12Qc0.07K0.11/PPpos \
-			  $(SAMPLE)/TOAT/Qo-0.12Qc0.07K0.11/PPdisp \
 	--tip_shift -3.0 \
 	--orbs_tip 1 \
 	--voltages -1.0 -0.8 -0.6 -0.4 -0.2 0.0 0.2 0.4 0.6 0.8 1.0 \
@@ -49,7 +47,12 @@ TOAT_ARGS= $(RUN) \
 
 PDOS= \
 	--pdos_list $(TIP)/blunt/aiida-PDOS-list2-1.pdos \
-				$(TIP)/blunt/aiida-PDOS-list1-1.pdos
+				$(TIP)/blunt/aiida-PDOS-list1-1.pdos \
+	--tip_pos_files $(SAMPLE)/TOAT/Qo-0.12Qc0.07K0.11/PPpos \
+			  $(SAMPLE)/TOAT/Qo-0.12Qc0.07K0.11/PPdisp 
+PARA= \
+	--pdos_list 0.1 0.5 0.0 0.5 0.1 \
+	--tip_pos_files $(SAMPLE)/TOAT/Qo-0.12Qc0.07K0.11/PPdisp
 
 # ==============================================================================
 # ==============================================================================
@@ -59,6 +62,12 @@ TOAT_PDOS_ROT:
 
 TOAT_PDOS:
 	$(TOAT_ARGS) $(PDOS) --output $(OUTPUT)/toat_tCO_pdos
+
+TOAT_PARA_ROT:
+	$(TOAT_ARGS) $(PARA) --output $(OUTPUT)/toat_tCO_para_rot --rotate
+
+TOAT_PARA:
+	$(TOAT_ARGS) $(PARA) --output $(OUTPUT)/toat_tCO_para
 
 # ==============================================================================
 # ==============================================================================

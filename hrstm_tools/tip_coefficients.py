@@ -28,7 +28,7 @@ def const_coeffs(emin, emax, de=0.1, s=0.0, py=0.0, pz=0.0, px=0.0):
             coeffs[idx+sum(cc[:3])-1,:] = [0.0, 0.0, pz**0.5, 0.0]
         if px != 0.0:
             coeffs[idx+sum(cc[:4])-1,:] = [0.0, 0.0, 0.0, px**0.5]
-        ene[idx:idx+sum(cc)] = eMin+de*n
+        ene[idx:idx+sum(cc)] = emin+de*n
 
     return [coeffs], [ene]
 
