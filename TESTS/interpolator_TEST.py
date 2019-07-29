@@ -1,3 +1,5 @@
+# Note: The results here are not difficult to proof, but still nice
+# to visualize.
 
 import sys
 import os
