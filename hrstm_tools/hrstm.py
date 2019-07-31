@@ -126,7 +126,8 @@ class Hrstm:
                             start = time.time()
                             for ivol, voltage in enumerate(self._voltages):
                                 ene = voltage+ene_tip-ene_sam
-                                if abs(ene) < 4.0*self._sigma:
+                                if ((0 <= ene_tip <= -voltage) or (-voltage <= ene_tip <= 0)) \
+                                    and abs(ene) < 4.0*self._sigma:
                                     self.local_current[ivol] += np.sign(ene_tip)*self._dos(ene) \
                                         * tunnel_matrix_squared
                             end = time.time()
