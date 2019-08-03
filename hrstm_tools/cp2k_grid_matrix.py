@@ -29,9 +29,6 @@ class Cp2kGridMatrix:
         self._ene = cp2k_grid_orb.morb_energies
         self._wfn_matrix = cp2k_grid_orb.morb_grids
         self._wfn_dim = np.shape(self.wfn_matrix[0])[1:]
-        # TODO eval_region should provide the evaluation region used for the whole matrix
-        #      whereas eval_region_local explcitily what is on this process. This includes wrapping!
-        #      for no mpi, the matrix should still be wrapped, i.e. a function call should be made
         self._eval_region = eval_region
         self._eval_region_local = self.eval_region
         self._reg_grid = None

@@ -26,6 +26,7 @@ TOAT_ARGS= $(RUN) \
 	--orbs_tip 1 \
 	--dx 0.2 \
 	--tip_fwhm 0.01 \
+	--voltages -1.0 -0.8 -0.6 -0.4 -0.2 0.0 0.2 0.4 0.6 0.8 1.0 \
 	--hartree_file $(SAMPLE)/TOAT/SAMPLE-HART-v_hartree-1_0.cube
 
 #TOAT_ARGS= $(RUN) \
@@ -51,23 +52,14 @@ PDOS= \
 	--tip_pos_files $(SAMPLE)/TOAT/Qo-0.12Qc0.07K0.11/PPpos \
 			  $(SAMPLE)/TOAT/Qo-0.12Qc0.07K0.11/PPdisp 
 PARA= \
-	--pdos_list 0.1 0.5 0.0 0.5 0.1 \
+	--pdos_list 0.1 0.5 0.0 0.5 \
 	--tip_pos_files $(SAMPLE)/TOAT/Qo-0.12Qc0.07K0.11/PPdisp
-
-HIGH= \
-	--voltages -1.0 -0.8 -0.6 -0.4 -0.2 0.0 0.2 0.4 0.6 0.8 1.0
-LOW= \
-	--voltages -0.2 -0.1 0.0 0.1 0.2
 
 # ==============================================================================
 # ==============================================================================
 
 TOAT_PDOS_ROT:
 	$(TOAT_ARGS) $(HIGH) $(PDOS) --output $(OUTPUT)/toat_tCO_pdos_rot --rotate
-
-TOAT_PDOS_ROT_LOW:
-	$(TOAT_ARGS) $(LOW) $(PDOS) --output $(OUTPUT)/toat_tCO_pdos_rot_low --rotate
-
 
 TOAT_PDOS:
 	$(TOAT_ARGS) $(PDOS) --output $(OUTPUT)/toat_tCO_pdos

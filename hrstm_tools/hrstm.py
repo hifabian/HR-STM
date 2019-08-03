@@ -27,7 +27,7 @@ class Hrstm:
         self._gm = sam_grid_matrix
         self._sigma = sam_fwhm/2.35482
         self._variance = self._sigma
-        if tip_fwhm is not None:
+        if tip_coefficients.type != "constant":
             self._tau = tip_fwhm/2.35482
         # Dirac tip:
             if np.isclose(tip_fwhm, 0.0):
@@ -48,10 +48,18 @@ class Hrstm:
     ### ------------------------------------------------------------------------
                     
     def _check_constant(self, ene_sam, enes_tip, voltages):
-        try:
-            return [True for val in enes_tip]
+        try: # Test if enes_tip is a container
+            skip = np.array([True for ene in enes_tip])
         except TypeError:
-            return True
+            skip = True
+        try: # Test if voltages is a container
+            for voltage in voltages:
+                skip &= (np.abs(voltage-ene_sam) >= 4.0*self._sigma)
+                skip &= ~(0 < ene_sam <= voltage or voltage < ene_sam <= 0)
+        except TypeError:
+            skip &= (np.abs(voltages-ene_sam) >= 4.0*self._sigma)
+            skip &= ~(0 < ene_sam <= voltages or voltages < ene_sam <= 0)
+        return ~skip
 
     def _constant(self, ene_sam, ene_tip, voltage):
         """

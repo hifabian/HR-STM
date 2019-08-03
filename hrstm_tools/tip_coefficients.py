@@ -10,26 +10,21 @@ import time
 from .hrstm_utils import read_PDOS
 
 
-def const_coeffs(emin, emax, de=0.1, s=0.0, py=0.0, pz=0.0, px=0.0):
+def const_coeffs(s=0.0, py=0.0, pz=0.0, px=0.0):
     """
     Creates coefficients for seperated tunnelling to each orbital.
     """
-    nE = int((emax-emin) / de)+1
     cc = np.array([s, py, pz, px]) != 0.0
-    coeffs = np.empty((nE*sum(cc),4),)
-    ene = np.empty(nE*sum(cc))
-    for n in range(nE):
-        idx = n*(sum(cc))
-        if s != 0.0:
-            coeffs[idx+sum(cc[:1])-1,:] = [s**0.5, 0.0, 0.0, 0.0]
-        if py != 0.0:
-            coeffs[idx+sum(cc[:2])-1,:] = [0.0, py**0.5, 0.0, 0.0]
-        if pz != 0.0:
-            coeffs[idx+sum(cc[:3])-1,:] = [0.0, 0.0, pz**0.5, 0.0]
-        if px != 0.0:
-            coeffs[idx+sum(cc[:4])-1,:] = [0.0, 0.0, 0.0, px**0.5]
-        ene[idx:idx+sum(cc)] = emin+de*n
-
+    coeffs = np.empty((sum(cc),4),)
+    ene = np.zeros(sum(cc))
+    if s != 0.0:
+         coeffs[sum(cc[:1])-1] = [s**0.5, 0.0, 0.0, 0.0]
+    if py != 0.0:
+         coeffs[sum(cc[:2])-1] = [0.0, py**0.5, 0.0, 0.0]
+    if pz != 0.0:
+         coeffs[sum(cc[:3])-1] = [0.0, 0.0, pz**0.5, 0.0]
+    if px != 0.0:
+         coeffs[sum(cc[:4])-1] = [0.0, 0.0, 0.0, px**0.5]
     return [coeffs], [ene]
 
 
@@ -60,12 +55,13 @@ class TipCoefficients:
     def read_coefficients(self, norbs, pdos_list, emin, emax):
         """
         Reads coefficients from files or via command line if given in the
-        shape (s, py, pz, px, de).
+        shape (s, py, pz, px).
         Coefficients are broadcasted to all MPI processes.
         """
         self._norbs = norbs
         self._singles = None
         self._ene = None
+        self.type = None
         self._grid_dim = None
         self._ntunnels = None
         self._coeffs = None
@@ -75,13 +71,14 @@ class TipCoefficients:
             idx = 0 # Index of input argument
             while idx < len(pdos_list):
                 try:
-                    single, self._ene = const_coeffs(emin, emax,
+                    single, self._ene = const_coeffs(
                         s=float(pdos_list[idx]),
                         py=float(pdos_list[idx+1]),
                         pz=float(pdos_list[idx+2]),
-                        px=float(pdos_list[idx+3]),
-                        de=float(pdos_list[idx+4]))
-                    idx += 5
+                        px=float(pdos_list[idx+3]))
+                    assert self.type != "gaussian", "Tried to mix tip types!"
+                    self.type = "constant"
+                    idx += 4
                 except ValueError:
                     single, self._ene = read_PDOS(pdos_list[idx],
                         emin, emax)
@@ -90,11 +87,14 @@ class TipCoefficients:
                         single[ispin] = \
                             single[ispin][:,:(self.norbs+1)**2]**0.5
                     idx += 1
+                    assert self.type != "constant", "Tried to mix tip types!"
+                    self.type = "gaussian"
                 self._singles.append(single)
         # Broadcast untransformed coefficients and energies
         if self.mpi_comm is not None:
             self._singles = self.mpi_comm.bcast(self._singles, root=0)
             self._ene = self.mpi_comm.bcast(self._ene, root=0)
+            self.type = self.mpi_comm.bcast(self.type, root=0)
 
 
     ### ------------------------------------------------------------------------
