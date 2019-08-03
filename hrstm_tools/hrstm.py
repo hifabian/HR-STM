@@ -2,6 +2,7 @@
 # @date   2019
 
 import numpy as np
+import scipy as sp
 
 import time
 
@@ -16,22 +17,104 @@ class Hrstm:
     x-axis only.
     """
 
-    def __init__(self, tip_coefficients, tip_grid_dim_all, sam_grid_matrix, fwhm, 
-        mpi_rank=0, mpi_size=1, mpi_comm=None):
+    def __init__(self, tip_coefficients, tip_grid_dim_all, sam_grid_matrix, 
+        sam_fwhm, tip_fwhm, mpi_rank=0, mpi_size=1, mpi_comm=None):
         self.mpi_rank = mpi_rank
         self.mpi_size = mpi_size
         self.mpi_comm = mpi_comm
         self._tc = tip_coefficients
         self._tip_grid_dim_all = tip_grid_dim_all
         self._gm = sam_grid_matrix
-        self._sigma = fwhm/2.35482
+        self._sigma = sam_fwhm/2.35482
+        self._variance = self._sigma
+        if tip_fwhm is not None:
+            self._tau = tip_fwhm/2.35482
+        # Dirac tip:
+            if np.isclose(tip_fwhm, 0.0):
+                self._check = self._check_dirac
+                self._factor = self._dirac
+        # Gaussian broadened tip:
+            else:
+                self._variance = self._sigma*self._tau \
+                    / (self._sigma**2+self._tau**2)**0.5
+                self._check = self._check_gaussian
+                self._factor = self._gaussian
+        # Constant tip
+        else:
+            self._tau = None
+            self._check = self._check_constant
+            self._factor = self._constant
 
+    ### ------------------------------------------------------------------------
+                    
+    def _check_constant(self, ene_sam, enes_tip, voltages):
+        try:
+            return [True for val in enes_tip]
+        except TypeError:
+            return True
 
-    def _dos(self, ene):
+    def _constant(self, ene_sam, ene_tip, voltage):
         """
-        Gaussian density of states. 
+        Constant tip density and Gaussian density for sample.
         """
-        return np.exp(-(ene / self._sigma)**2) / (self._sigma*(2*np.pi)**0.5)
+        return 0.5*(sp.special.erf((voltage-ene_sam)/(2.**0.5*self._sigma)) \
+            - sp.special.erf((0.0-ene_sam)/(2.**0.5*self._sigma)))
+
+    ### ------------------------------------------------------------------------
+
+    def _check_gaussian(self, ene_sam, enes_tip, voltages):
+        vals = (enes_tip*ene_sam > 0.0) \
+            | ((ene_sam <= 0.0) & (enes_tip == 0.0)) \
+            | ((ene_sam == 0.0) & (enes_tip <= 0.0))
+        skip = True
+        try:
+            for voltage in voltages:
+                skip &= (np.abs(voltage-ene_sam+enes_tip) \
+                    >= 4.0*(self._sigma+self._tau))
+        except TypeError:
+            skip &= (np.abs(voltages-ene_sam+enes_tip) \
+                >= 4.0*(self._sigma+self._tau))
+        return ~(skip | vals)
+
+    def _gaussian(self, ene_sam, ene_tip, voltage):
+        """
+        Gaussian density for tip and sample.
+        """
+        # Product of two Gaussian is a Gaussian but don't forget pre-factor
+        mean = (self._sigma**2*(ene_tip+voltage)+self._tau**2*ene_sam) \
+            / (self._sigma**2+self._tau**2)
+        sigma = self._variance
+        correction = 1. / (2.*np.pi*(self._sigma**2+self._tau**2))**0.5 \
+            * np.exp(-0.5*(ene_sam-ene_tip-voltage)**2 \
+            / (self._sigma**2+self._tau**2))
+        return 0.5*correction*(sp.special.erf((voltage-mean)/(2.**0.5*sigma)) \
+            - sp.special.erf((0.0-mean)/(2.**0.5*sigma)))
+
+    ### ------------------------------------------------------------------------
+
+    def _check_dirac(self, ene_sam, enes_tip, voltages):
+        vals = (enes_tip*ene_sam > 0.0) \
+            | ((ene_sam <= 0.0) & (enes_tip == 0.0)) \
+            | ((ene_sam == 0.0) & (enes_tip <= 0.0))
+        skip = True
+        try:
+            for voltage in voltages:
+                  skip &= (np.abs(voltage-ene_sam+enes_tip) >= 4.0*self._sigma)
+        except TypeError:
+            skip &= (np.abs(voltages-ene_sam+enes_tip) >= 4.0*self._sigma)
+        return ~(skip | vals)
+    def _dirac(self, ene_sam, ene_tip, voltage):
+        """
+        Gaussian density of states (integration with a Dirac function).
+        
+        Note: This is also the limit of _gaussian2_integrated as self._tau -> 0
+        """
+        # Minus sign since voltage is added to tip energy:
+        # Relevant range is then (0,-voltage] or (-voltage,0]
+        if 0 < ene_tip <= -voltage or -voltage < ene_tip <= 0:
+            return np.sign(voltage)*np.exp(-0.5*((ene_sam-ene_tip-voltage) \
+                / self._sigma)**2) / (self._sigma*(2*np.pi)**0.5)
+        return 0.0
 
 
     ### ------------------------------------------------------------------------
@@ -82,7 +165,8 @@ class Hrstm:
             for iheight in range(self._tip_grid_dim_all[-1]):
                 for ivol in range(len(self._voltages)):
                     max_val = np.max(np.abs(current[:,:,iheight,ivol]))
-                    current[:,:,iheight,ivol][np.abs(current[:,:,iheight,ivol]) < max_val*tol] = 0.0
+                    current[:,:,iheight,ivol][np.abs(current[:,:,iheight,ivol])\
+                        < max_val*tol] = 0.0
             np.savez_compressed(filename, current.ravel())
 
 
@@ -109,13 +193,9 @@ class Hrstm:
                 for iene_sam, ene_sam in enumerate(self._gm.ene[ispin_sam]):
                     for ispin_tip, enes_tip in enumerate(self._tc.ene):
                         ienes_tip = np.arange(len(enes_tip))
-                        vals = (enes_tip*ene_sam > 0.0) \
-                            | ((ene_sam <= 0.0) & (enes_tip == 0.0)) \
-                            | ((ene_sam == 0.0) & (enes_tip <= 0.0))
-                        skip = True
-                        for voltage in self._voltages:
-                            skip &= (np.abs(voltage-ene_sam+enes_tip) >= 4.0*self._sigma)
-                        for iene_tip in [iene_tip for iene_tip in ienes_tip[~(skip | vals)]]:
+                        for iene_tip in [iene_tip for iene_tip in \
+                            ienes_tip[self._check(ene_sam,enes_tip,self._voltages)]]:
+                            # Current tip energy
                             ene_tip = self._tc.ene[ispin_tip][iene_tip]
                             start = time.time()
                             tunnel_matrix_squared = (np.einsum("i...,i...->...",
@@ -125,10 +205,9 @@ class Hrstm:
                             totTM += end-start
                             start = time.time()
                             for ivol, voltage in enumerate(self._voltages):
-                                ene = voltage+ene_tip-ene_sam
-                                if ((0 <= ene_tip <= -voltage) or (-voltage <= ene_tip <= 0)) \
-                                    and abs(ene) < 4.0*self._sigma:
-                                    self.local_current[ivol] += np.sign(ene_tip)*self._dos(ene) \
+                                if self._check(ene_sam, ene_tip, voltage):
+                                    self.local_current[ivol] += \
+                                        self._factor(ene_sam,ene_tip,voltage) \
                                         * tunnel_matrix_squared
                             end = time.time()
                             totVL += end-start

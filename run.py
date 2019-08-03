@@ -162,12 +162,17 @@ parser.add_argument('--voltages',
     required=True,
     help="Voltages used for STM.")
 
-parser.add_argument('--fwhm',
+parser.add_argument('--sam_fwhm',
     type=float,
     metavar='eV',
     default=0.05,
     required=False,
     help="Full width at half maximum for Gaussian broadening of sample states.")
+parser.add_argument('--tip_fwhm',
+    type=float,
+    metavar='eV',
+    required=False,
+    help="Full width at half maximum for Gaussian broadening of tip states.")
 
 ### ----------------------------------------------------------------------------
 ### Parse args one one rank and broadcast it
@@ -204,8 +209,8 @@ print("Reading tip positions in {} seconds for rank {}.".format(end-start, \
 
 start = time.time()
 tip_coeffs = tc.TipCoefficients(mpi_rank, mpi_size, mpi_comm)
-tip_coeffs.read_coefficients(args.orbs_tip, args.pdos_list, min(args.voltages), 
-    max(args.voltages))
+tip_coeffs.read_coefficients(args.orbs_tip, args.pdos_list, 
+    min(args.voltages)-2.0*args.tip_fwhm, max(args.voltages)+2.0*args.tip_fwhm)
 tip_coeffs.initialize(tip_pos, args.rotate)
 end = time.time()
 print("Reading tip coefficients in {} seconds for rank {}.".format(end-start, \
@@ -222,7 +227,7 @@ sam_grid_orb.read_cp2k_input(args.cp2k_input_file)
 sam_grid_orb.read_xyz(args.xyz_file)
 sam_grid_orb.read_basis_functions(args.basis_set_file)
 sam_grid_orb.load_restart_wfn_file(args.wfn_file,
-    emin=args.emin-2.0*args.fwhm, emax=args.emax+2.0*args.fwhm)
+    emin=args.emin-2.0*args.sam_fwhm, emax=args.emax+2.0*args.sam_fwhm)
 sam_grid_orb.calc_morbs_in_region(args.dx,
     z_eval_region=sam_eval_region[2]*ang2bohr,
     reserve_extrap = args.extrap_dist,
@@ -272,8 +277,8 @@ if mpi_rank == 0:
             'voltages' : args.voltages,}
     np.save(args.output+"_meta.npy", meta)
 start = time.time()
-hrstm = hs.Hrstm(tip_coeffs, tip_grid_dim_all, sam_grid_matrix, args.fwhm, \
-  mpi_rank, mpi_size, mpi_comm)
+hrstm = hs.Hrstm(tip_coeffs, tip_grid_dim_all, sam_grid_matrix, args.sam_fwhm, \
+  args.tip_fwhm, mpi_rank, mpi_size, mpi_comm)
 hrstm.run(args.voltages)
 hrstm.write_compressed(args.output)
 end = time.time()
