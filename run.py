@@ -95,12 +95,12 @@ parser.add_argument('--emax',
 
 ### ----------------------------------------------------------------------------
 ### Parameters for putting sample orbitals on grid
-parser.add_argument('--dx',
+parser.add_argument('--dx_sam',
     type=float,
     metavar='Ang',
-    default=0.1,
+    default=0.2,
     required=False,
-    help="Spacing for grid used by interpolation.")
+    help="Spacing for wavefunction grid used by interpolation.")
 
 parser.add_argument('--rcut',
     type=float,
@@ -121,14 +121,28 @@ parser.add_argument('--extrap_dist',
 parser.add_argument('--tip_pos_files',
     metavar='FILE',
     nargs='+',
-    required=True,
+    required=False,
     help="File paths to positions of probe particles (without '_<x,y,z>.npy').")
 
 parser.add_argument('--tip_shift',
     type=float,
     metavar='Ang',
-    required=True,
-    help="z-distance shift for metal tip with respect to apex probe particle.")
+    required=False,
+    help="z-distance shift for metal tip with respect to apex probe particle. "
+    + "Only used with relaxed positions.")
+
+parser.add_argument('--eval_region',
+    type=float,
+    metavar='Ang',
+    nargs='+',
+    required=False,
+    help="Tip positions for uniform grid.")
+
+parser.add_argument('--dx_tip',
+    type=float,
+    metavar='Ang',
+    required=False,
+    help="Spacing for a uniform grid used in current calculation.")
 
 parser.add_argument('--pdos_list',
     metavar='FILE',
@@ -197,8 +211,14 @@ args = mpi_comm.bcast(args, root=0)
 ### ----------------------------------------------------------------------------
 
 start = time.time()
-tip_pos, tip_grid_dim_all, sam_eval_region, lVec = hu.read_tip_positions( \
-    args.tip_pos_files, args.tip_shift, args.dx, mpi_rank, mpi_size, mpi_comm)
+if args.tip_pos_files is not None and args.tip_shift is not None:
+    tip_pos, tip_grid_dim_all, sam_eval_region, lVec = hu.read_tip_positions( \
+        args.tip_pos_files, args.tip_shift, args.dx_sam, mpi_rank, mpi_size, mpi_comm)
+elif args.eval_region is not None and args.dx_tip is not None and not args.rotate:
+    tip_pos, tip_grid_dim_all, sam_eval_region, lVec = hu.create_tip_positions( \
+        args.eval_region, args.dx_tip, mpi_rank, mpi_size, mpi_comm)
+else:
+    raise ImportError("Missing tip positions.") 
 end = time.time()
 print("Reading tip positions in {} seconds for rank {}.".format(end-start, \
     mpi_rank))
@@ -228,7 +248,7 @@ sam_grid_orb.read_xyz(args.xyz_file)
 sam_grid_orb.read_basis_functions(args.basis_set_file)
 sam_grid_orb.load_restart_wfn_file(args.wfn_file,
     emin=args.emin-2.0*args.sam_fwhm, emax=args.emax+2.0*args.sam_fwhm)
-sam_grid_orb.calc_morbs_in_region(args.dx,
+sam_grid_orb.calc_morbs_in_region(args.dx_sam,
     z_eval_region=sam_eval_region[2]*ang2bohr,
     reserve_extrap = args.extrap_dist,
     eval_cutoff = args.rcut)

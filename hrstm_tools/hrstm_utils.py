@@ -119,6 +119,11 @@ def read_tip_positions(files, shift, dx, mpi_rank=0, mpi_size=1, mpi_comm=None):
     """
     Function to read tip positions and to determine grid orbital evaluation 
     region for sample (determined using tip positions).
+
+    @return pos             List with positions for this rank.
+            grid_dim        Total dimension of positions.
+            sam_eval_region Region encompassing all positions.
+            lVec            Region of non-relaxed positions (Oxygen).
     """
     # Only reading on one rank, could be optimized but not the bottleneck
     if mpi_rank == 0:
@@ -168,3 +173,38 @@ def read_tip_positions(files, shift, dx, mpi_rank=0, mpi_size=1, mpi_comm=None):
                 MPI.DOUBLE], pos[gridIdx][axis], root=0)
     return pos, grid_dim, sam_eval_region, lVec
 
+
+def create_tip_positions(eval_region, dx, mpi_rank=0, mpi_size=1, mpi_comm=None):
+    """
+    Creates uniform grids for tip positions. Due to the structure of the code,
+    this returns a tuple with twice the same grid. Rotations are not supported.
+
+    @return pos             List with positions for this rank.
+            grid_dim        Total dimension of positions.
+            sam_eval_region Region encompassing all positions.
+            lVec            Region of non-relaxed positions (Oxygen).
+    """
+    eval_region = np.reshape(eval_region,(3,2))
+    lVec = np.zeros((4,3))
+    lVec[0,0] = eval_region[0,0]
+    lVec[1,0] = eval_region[0,1]-eval_region[0,0]
+    lVec[0,1] = eval_region[1,0]
+    lVec[2,1] = eval_region[1,1]-eval_region[1,0]
+    lVec[0,2] = eval_region[2,0]
+    lVec[3,2] = eval_region[2,1]-eval_region[2,0] 
+    grid_dim = (int(lVec[1,0]/dx+1), int(lVec[2,1]/dx+1), int(lVec[3,2]/dx+1))
+    # True spacing
+    dxyz = [lVec[i+1,i] / (grid_dim[i]-1) for i in range(3)]
+    all_x_ids = np.array_split(np.arange(grid_dim[0]), mpi_size)
+    start = lVec[0,0]+dxyz[0]*all_x_ids[mpi_rank][0]
+    end = lVec[0,0]+dxyz[0]*all_x_ids[mpi_rank][-1]
+    grid = np.mgrid[ \
+        start:end:len(all_x_ids[mpi_rank])*1j,
+        lVec[0,1]:lVec[0,1]+lVec[2,1]:grid_dim[1]*1j,
+        lVec[0,2]:lVec[0,2]+lVec[3,2]:grid_dim[2]*1j]
+    # Increase eval_region to account for non-periodic axis
+    eval_region[2,0] -= dxyz[-1] / 2
+    eval_region[2,1] += dxyz[-1] / 2
+    # Positions emulating apex atom + metal tip
+    pos = [grid, grid]
+    return pos, grid_dim, eval_region, lVec
