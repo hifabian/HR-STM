@@ -2,7 +2,7 @@
 
 # @author  Hillebrand, Fabian
 # @date    2019
-# @version dev2.0.0
+# @version 2.0.0
 
 import argparse # Terminal arguments
 import os
@@ -25,7 +25,7 @@ import atomistic_tools.cp2k_stm_sts as css
 from atomistic_tools import common
 from atomistic_tools.cube import Cube
 
-import hrstm_tools.tip_coefficients as tc
+import hrstm_tools.tip_coeffs as tc
 import hrstm_tools.cp2k_grid_matrix as cgm
 import hrstm_tools.hrstm_utils as hu
 import hrstm_tools.hrstm as hs
@@ -77,6 +77,13 @@ parser.add_argument('--hartree_file',
     required=True,
     help="Cube file with Hartree potential of sample.")
 
+parser.add_argument('--fwhm_sam',
+    type=float,
+    metavar='eV',
+    default=0.05,
+    required=False,
+    help="Full width at half maximum for Gaussian broadening of DoS for sample.")
+
 ### ----------------------------------------------------------------------------
 ### Energy range for sample
 parser.add_argument('--emin',
@@ -95,7 +102,7 @@ parser.add_argument('--emax',
 
 ### ----------------------------------------------------------------------------
 ### Parameters for putting sample orbitals on grid
-parser.add_argument('--dx_sam',
+parser.add_argument('--dx_wfn',
     type=float,
     metavar='Ang',
     default=0.2,
@@ -128,30 +135,29 @@ parser.add_argument('--tip_shift',
     type=float,
     metavar='Ang',
     required=False,
-    help="z-distance shift for metal tip with respect to apex probe particle. "
-    + "Only used with relaxed positions.")
+    help="z-distance shift for metal tip with respect to apex probe particle."
+    + " Only used with relaxed positions.")
 
 parser.add_argument('--eval_region',
     type=float,
     metavar='Ang',
     nargs='+',
     required=False,
-    help="Tip positions for uniform grid.")
+    help="Tip positions in case of non-relaxed positions.")
 
 parser.add_argument('--dx_tip',
     type=float,
     metavar='Ang',
     required=False,
-    help="Spacing for a uniform grid used in current calculation.")
+    help="Spacing for a uniform grid for non-relaxed positions.")
 
 parser.add_argument('--pdos_list',
     metavar='FILE',
     nargs='+',
     required=True,
     help="List of PDOS files for the different tip apexes used as tip"
-    + " coefficients. Or, alternatively, five numbers corresponding to"
-    + " [s py pz px de] for uniform PDOS values whose energies are spaced"
-    + " de apart from each other." )
+    + " coefficients. Or, alternatively, four numbers corresponding to"
+    + " [s py pz px] for uniform PDOS values (constant DoS).")
 
 parser.add_argument('--orbs_tip',
     type=int,
@@ -160,6 +166,12 @@ parser.add_argument('--orbs_tip',
     required=False,
     help="Integer indicating which orbitals of the tip are used following the"
     + " angular momentum quantum number.")
+
+parser.add_argument('--fwhm_tip',
+    type=float,
+    metavar='eV',
+    required=False,
+    help="Full width at half maximum for Gaussian broadening of DoS for tip.")
 
 parser.add_argument('--rotate',
     action="store_true",
@@ -175,18 +187,6 @@ parser.add_argument('--voltages',
     nargs='+',
     required=True,
     help="Voltages used for STM.")
-
-parser.add_argument('--sam_fwhm',
-    type=float,
-    metavar='eV',
-    default=0.05,
-    required=False,
-    help="Full width at half maximum for Gaussian broadening of sample states.")
-parser.add_argument('--tip_fwhm',
-    type=float,
-    metavar='eV',
-    required=False,
-    help="Full width at half maximum for Gaussian broadening of tip states.")
 
 ### ----------------------------------------------------------------------------
 ### Parse args one one rank and broadcast it
@@ -212,15 +212,17 @@ args = mpi_comm.bcast(args, root=0)
 
 start = time.time()
 if args.tip_pos_files is not None and args.tip_shift is not None:
-    tip_pos, tip_grid_dim_all, sam_eval_region, lVec = hu.read_tip_positions( \
-        args.tip_pos_files, args.tip_shift, args.dx_sam, mpi_rank, mpi_size, mpi_comm)
-elif args.eval_region is not None and args.dx_tip is not None and not args.rotate:
-    tip_pos, tip_grid_dim_all, sam_eval_region, lVec = hu.create_tip_positions( \
+    pos_local, dim_pos, eval_region_wfn, lVec = hu.read_tip_positions(
+        args.tip_pos_files, args.tip_shift, args.dx_wfn, mpi_rank, mpi_size, 
+        mpi_comm)
+elif args.eval_region is not None and args.dx_tip is not None \
+    and not args.rotate:
+    pos_local, dim_pos, eval_region_wfn, lVec = hu.create_tip_positions(
         args.eval_region, args.dx_tip, mpi_rank, mpi_size, mpi_comm)
 else:
     raise ImportError("Missing tip positions.") 
 end = time.time()
-print("Reading tip positions in {} seconds for rank {}.".format(end-start, \
+print("Reading tip positions in {} seconds for rank {}.".format(end-start,
     mpi_rank))
 
 ### ----------------------------------------------------------------------------
@@ -230,10 +232,10 @@ print("Reading tip positions in {} seconds for rank {}.".format(end-start, \
 start = time.time()
 tip_coeffs = tc.TipCoefficients(mpi_rank, mpi_size, mpi_comm)
 tip_coeffs.read_coefficients(args.orbs_tip, args.pdos_list, 
-    min(args.voltages)-2.0*args.tip_fwhm, max(args.voltages)+2.0*args.tip_fwhm)
-tip_coeffs.initialize(tip_pos, args.rotate)
+    min(args.voltages)-4.0*args.fwhm_tip, max(args.voltages)+4.0*args.fwhm_tip)
+tip_coeffs.initialize(pos_local, args.rotate)
 end = time.time()
-print("Reading tip coefficients in {} seconds for rank {}.".format(end-start, \
+print("Reading tip coefficients in {} seconds for rank {}.".format(end-start,
     mpi_rank))
 
 ### ----------------------------------------------------------------------------
@@ -241,19 +243,19 @@ print("Reading tip coefficients in {} seconds for rank {}.".format(end-start, \
 ### ----------------------------------------------------------------------------
 
 start = time.time()
-sam_grid_orb = cgo.Cp2kGridOrbitals(mpi_rank, mpi_size, mpi_comm,
+wfn_grid_orb = cgo.Cp2kGridOrbitals(mpi_rank, mpi_size, mpi_comm,
     single_precision=False)
-sam_grid_orb.read_cp2k_input(args.cp2k_input_file)
-sam_grid_orb.read_xyz(args.xyz_file)
-sam_grid_orb.read_basis_functions(args.basis_set_file)
-sam_grid_orb.load_restart_wfn_file(args.wfn_file,
-    emin=args.emin-2.0*args.sam_fwhm, emax=args.emax+2.0*args.sam_fwhm)
-sam_grid_orb.calc_morbs_in_region(args.dx_sam,
-    z_eval_region=sam_eval_region[2]*ang2bohr,
+wfn_grid_orb.read_cp2k_input(args.cp2k_input_file)
+wfn_grid_orb.read_xyz(args.xyz_file)
+wfn_grid_orb.read_basis_functions(args.basis_set_file)
+wfn_grid_orb.load_restart_wfn_file(args.wfn_file,
+    emin=args.emin-4.0*args.fwhm_sam, emax=args.emax+4.0*args.fwhm_sam)
+wfn_grid_orb.calc_morbs_in_region(args.dx_wfn,
+    z_eval_region=eval_region_wfn[2]*ang2bohr,
     reserve_extrap = args.extrap_dist,
     eval_cutoff = args.rcut)
 end = time.time()
-print("Building CP2K wave function matrix in {} seconds for rank {}.".format( \
+print("Building CP2K wave function matrix in {} seconds for rank {}.".format(
   end-start, mpi_rank))
 
 ### ----------------------------------------------------------------------------
@@ -263,14 +265,14 @@ print("Building CP2K wave function matrix in {} seconds for rank {}.".format( \
 start = time.time()
 hart_cube = Cube()
 hart_cube.read_cube_file(args.hartree_file)
-extrap_plane_z = sam_eval_region[2][1] \
-    - np.max(sam_grid_orb.ase_atoms.positions[:,2])
+extrap_plane_z = eval_region_wfn[2][1] \
+    - np.max(wfn_grid_orb.ase_atoms.positions[:,2])
 hart_plane = hart_cube.get_plane_above_topmost_atom(extrap_plane_z) \
-  - sam_grid_orb.ref_energy*ev2hartree
+  - wfn_grid_orb.ref_energy*ev2hartree
 del hart_cube, extrap_plane_z
-sam_grid_orb.extrapolate_morbs(hart_plane=hart_plane)
+wfn_grid_orb.extrapolate_morbs(hart_plane=hart_plane)
 end = time.time()
-print("Extrapolating CP2K wave function matrix in {} seconds for rank {}."\
+print("Extrapolating CP2K wave function matrix in {} seconds for rank {}."
   .format(end-start, mpi_rank))
 
 ### ----------------------------------------------------------------------------
@@ -278,12 +280,12 @@ print("Extrapolating CP2K wave function matrix in {} seconds for rank {}."\
 ### ----------------------------------------------------------------------------
 
 start = time.time()
-sam_grid_matrix = cgm.Cp2kGridMatrix(sam_grid_orb, sam_eval_region, tip_pos[1:],
-    args.orbs_tip, mpi_rank, mpi_size, mpi_comm)
-del sam_grid_orb, tip_pos
-sam_grid_matrix.divide()
+wfn_grid_matrix = cgm.Cp2kGridMatrix(wfn_grid_orb, eval_region_wfn, 
+    pos_local[1:], args.orbs_tip, mpi_rank, mpi_size, mpi_comm)
+del wfn_grid_orb, pos_local
+wfn_grid_matrix.divide()
 end = time.time()
-print("Setting up wave function object in {} seconds for rank {}."\
+print("Setting up wave function object in {} seconds for rank {}."
     .format(end-start, mpi_rank))
 
 ### ----------------------------------------------------------------------------
@@ -292,13 +294,13 @@ print("Setting up wave function object in {} seconds for rank {}."\
 
 # Meta information
 if mpi_rank == 0:
-    meta = {'dimGrid' : tip_grid_dim_all,
+    meta = {'dimGrid' : dim_pos,
             'lVec' : lVec,
             'voltages' : args.voltages,}
     np.save(args.output+"_meta.npy", meta)
 start = time.time()
-hrstm = hs.Hrstm(tip_coeffs, tip_grid_dim_all, sam_grid_matrix, args.sam_fwhm, \
-  args.tip_fwhm, mpi_rank, mpi_size, mpi_comm)
+hrstm = hs.Hrstm(tip_coeffs, dim_pos, wfn_grid_matrix, args.fwhm_sam,
+    args.fwhm_tip, mpi_rank, mpi_size, mpi_comm)
 hrstm.run(args.voltages)
 hrstm.write_compressed(args.output)
 end = time.time()

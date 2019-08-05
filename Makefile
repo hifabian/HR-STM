@@ -22,9 +22,9 @@ TOAT_ARGS= $(RUN) \
 	--basis_set_file $(SAMPLE)/BASIS_MOLOPT \
 	--xyz_file $(SAMPLE)/TOAT/sample.xyz \
 	--wfn_file $(SAMPLE)/TOAT/SAMPLE-RESTART.wfn \
-	--dx_sam 0.2 \
+	--dx_wfn 0.2 \
 	--orbs_tip 1 \
-	--tip_fwhm 0.01 \
+	--fwhm_tip 0.01 \
 	--voltages -1.0 -0.8 -0.6 -0.4 -0.2 0.0 0.2 0.4 0.6 0.8 1.0 \
 	--hartree_file $(SAMPLE)/TOAT/SAMPLE-HART-v_hartree-1_0.cube
 

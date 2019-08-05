@@ -17,17 +17,17 @@ class Hrstm:
     x-axis only.
     """
 
-    def __init__(self, tip_coefficients, tip_grid_dim_all, sam_grid_matrix, 
+    def __init__(self, tip_coeffs, dim_pos, wfn_grid_matrix, 
         sam_fwhm, tip_fwhm, mpi_rank=0, mpi_size=1, mpi_comm=None):
         self.mpi_rank = mpi_rank
         self.mpi_size = mpi_size
         self.mpi_comm = mpi_comm
-        self._tc = tip_coefficients
-        self._tip_grid_dim_all = tip_grid_dim_all
-        self._gm = sam_grid_matrix
+        self._tc = tip_coeffs
+        self._dim_pos = dim_pos
+        self._gm = wfn_grid_matrix
         self._sigma = sam_fwhm/2.35482
         self._variance = self._sigma
-        if tip_coefficients.type != "constant":
+        if self._tc.type != "constant":
             self._tau = tip_fwhm/2.35482
         # Dirac tip:
             if np.isclose(tip_fwhm, 0.0):
@@ -54,17 +54,15 @@ class Hrstm:
             skip = True
         try: # Test if voltages is a container
             for voltage in voltages:
-                skip &= (np.abs(voltage-ene_sam) >= 4.0*self._sigma)
-                skip &= ~(0 < ene_sam <= voltage or voltage < ene_sam <= 0)
+                skip &= ~(-4.0*self._sigma < ene_sam <= voltage+4.0*self._sigma \
+                    or voltage-4.0*self._sigma < ene_sam <= 4.0*self._sigma)
         except TypeError:
-            skip &= (np.abs(voltages-ene_sam) >= 4.0*self._sigma)
-            skip &= ~(0 < ene_sam <= voltages or voltages < ene_sam <= 0)
+            skip &= ~(-4.0*self._sigma < ene_sam <= voltages+4.0*self._sigma \
+                or voltages-4.0*self._sigma < ene_sam <= 4.0*self._sigma)
         return ~skip
 
     def _constant(self, ene_sam, ene_tip, voltage):
-        """
-        Constant tip density and Gaussian density for sample.
-        """
+        """ Constant tip density and Gaussian density for sample. """
         return 0.5*(sp.special.erf((voltage-ene_sam)/(2.**0.5*self._sigma)) \
             - sp.special.erf((0.0-ene_sam)/(2.**0.5*self._sigma)))
 
@@ -85,9 +83,7 @@ class Hrstm:
         return ~(skip | vals)
 
     def _gaussian(self, ene_sam, ene_tip, voltage):
-        """
-        Gaussian density for tip and sample.
-        """
+        """ Gaussian density for tip and sample. """
         # Product of two Gaussian is a Gaussian but don't forget pre-factor
         mean = (self._sigma**2*(ene_tip+voltage)+self._tau**2*ene_sam) \
             / (self._sigma**2+self._tau**2)
@@ -115,28 +111,25 @@ class Hrstm:
         """
         Gaussian density of states (integration with a Dirac function).
         
-        Note: This is also the limit of _gaussian2_integrated as self._tau -> 0
+        Note: This is also the limit of self._gaussian as self._tau -> 0
         """
         # Minus sign since voltage is added to tip energy:
         # Relevant range is then (0,-voltage] or (-voltage,0]
         if 0 < ene_tip <= -voltage or -voltage < ene_tip <= 0:
-            return np.sign(voltage)*np.exp(-0.5*((ene_sam-ene_tip-voltage) \
+            return np.exp(-0.5*((ene_sam-ene_tip-voltage) \
                 / self._sigma)**2) / (self._sigma*(2*np.pi)**0.5)
         return 0.0
-
 
     ### ------------------------------------------------------------------------
     ### Store and collect
     ### ------------------------------------------------------------------------
 
     def gather(self):
-        """
-        Gathers the current and returns it on rank 0.
-        """
+        """ Gathers the current and returns it on rank 0. """
         if self.mpi_comm is None:
             return self.local_current
         if self.mpi_rank == 0:
-            current = np.empty(self._tip_grid_dim_all+(len(self._voltages),))
+            current = np.empty(self._dim_pos+(len(self._voltages),))
         else:
             current = None
         outputs = self.mpi_comm.allgather(len(self.local_current.ravel()))
@@ -144,55 +137,42 @@ class Hrstm:
         return current
 
     def write(self, filename):
-        """!
-        @brief Writes the current to a file (*.npy).
+        """
+        Writes the current to a file (*.npy).
 
         The file is written as a 1-dimensional array. The reconstruction has
         thus be done by hand. It can be reshaped into a 4-dimensional array in
         the form [zIdx,yIdx,xIdx,vIdx].
-
-        @param filename Name of file.
         """
         pass
 
     def write_compressed(self, filename, tol=1e-3):
-        """!
-        @brief Writes the current compressed to a file (*.npz).
+        """
+        Writes the current compressed to a file (*.npz).
 
         The file is written as a 1-dimensional array similar to write().
         Furthermore, in order to load the current use np.load()['arr_0'].
 
-        @attention This method evokes a gather!
-
-        @param filename Name of file.
-        @param tol      Relative toleranz to the maximum for a height 
-                        and voltage.
+        @attention This method invokes a gather!
         """
         current = self.gather()
         if self.mpi_rank == 0:
-            for iheight in range(self._tip_grid_dim_all[-1]):
+            for iheight in range(self._dim_pos[-1]):
                 for ivol in range(len(self._voltages)):
                     max_val = np.max(np.abs(current[:,:,iheight,ivol]))
                     current[:,:,iheight,ivol][np.abs(current[:,:,iheight,ivol])\
                         < max_val*tol] = 0.0
             np.savez_compressed(filename, current.ravel())
 
-
     ### ------------------------------------------------------------------------
     ### Running HR-STM
     ### ------------------------------------------------------------------------
 
     def run(self, voltages):
-        """!
-        @brief Performs the HR-STM simulation.
-
-        @param voltages List of bias voltages in eV.
-        """
+        """ Performs the HR-STM simulation. """
         self._voltages = np.array(voltages)
-
         # Currents for all bias voltages
         self.local_current = np.zeros((len(self._voltages),)+self._tc.grid_dim)
-
         # Over each separate tunnel process (e.g. to O- or C-atom)
         totTM = 0.0
         totVL = 0.0

@@ -3,11 +3,10 @@
 
 import numpy as np
 
-################################################################################
 class Interpolator:
-    """!
-    @brief Provides an interpolator for a regular grid with consistent stepsize
-           along an axis.
+    """
+    Provides an interpolator for a regular grid with consistent stepsize along 
+    an axis.
 
     The interpolation scheme used is currently piecewise linear polynomials.
     As such, the convergence rate is algebraic with a rate of 2.
@@ -22,10 +21,6 @@ class Interpolator:
     """
 
     def __init__(self, x, f):
-        """!
-        @param x Grid axes.
-        @param f Function evaluated on complete grid.
-        """
         self.x = x
         self.f = f
         self.dx = x[0][1]-x[0][0]
@@ -37,14 +32,12 @@ class Interpolator:
             np.gradient(self.f,self.dy,edge_order=2,axis=1),
             np.gradient(self.f,self.dz,edge_order=2,axis=2)]
 
+    ### ------------------------------------------------------------------------
+    ### Evaluation functions
+    ### ------------------------------------------------------------------------
 
-    ############################################################################
     def __call__(self, x, y, z):
-        """!
-        @brief Evaluates interpolated value at given points.
-
-        @param x, y, z Positions.
-        """
+        """ Evaluates interpolated value at given points. """
         indX = ((x-self.x[0][0])/self.dx).astype(int)
         indY = ((y-self.x[1][0])/self.dy).astype(int)
         indZ = ((z-self.x[2][0])/self.dz).astype(int)
@@ -65,10 +58,9 @@ class Interpolator:
                     +(z-self.x[2][indZ])*self.f[indX+1,indY+1,indZ+1])))\
             / (self.dx*self.dy*self.dz)
 
-    ############################################################################
     def gradient(self, x, y, z, direct):
-        """!
-        @brief Evaluates gradient of interpolation in specified direciton.
+        """
+        Evaluates gradient of interpolation in specified direciton.
 
         @param x, y, z Position.
         @param direct  Direction of gradient (x=1,y=2,z=3).
@@ -98,5 +90,3 @@ class Interpolator:
                      (self.x[2][indZ+1]-z)*tmp[indX+1,indY+1,indZ]   \
                     +(z-self.x[2][indZ])*tmp[indX+1,indY+1,indZ+1])))\
            / (self.dx*self.dy*self.dz)
-
-################################################################################

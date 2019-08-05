@@ -1,5 +1,5 @@
 # @author Hillebrand, Fabian
-# @date   2018-2019
+# @date   2019
 
 import numpy as np
 
@@ -39,7 +39,6 @@ class Cp2kGridMatrix:
         self._wfn = None
         self._divide_flag = False
 
-
     def _get_slice(cls, wm, ids, axis):
         """
         Cuts a semi-periodic function defined on a grid according to the 
@@ -65,7 +64,6 @@ class Cp2kGridMatrix:
         else:
             slice0[axis] = slice(ids[0],ids[1]+1)
             return wm[tuple(slice0)]
-
 
     def divide(self):
         """
@@ -112,7 +110,8 @@ class Cp2kGridMatrix:
                         recvbuf = np.empty(len(ene[ispin])*npoints)
                     else:
                         recvbuf = None
-                    sendbuf = np.array(self._get_slice(self.wfn_matrix[ispin],isx_all[rank],0),order='C').ravel()
+                    sendbuf = np.array(self._get_slice(self.wfn_matrix[ispin],
+                        isx_all[rank],0),order='C').ravel()
                     self.mpi_comm.Gatherv(sendbuf=sendbuf, recvbuf=[recvbuf,
                         nene_by_rank*npoints], root=rank)
                     if self.mpi_rank == rank:
@@ -133,7 +132,6 @@ class Cp2kGridMatrix:
                         self.eval_region_local[1][1],self.wfn_dim[1]),
             np.linspace(self.eval_region_local[2][0],
                         self.eval_region_local[2][1],self.wfn_dim[2]))
-
 
     ### ------------------------------------------------------------------------
     ### Access operators
@@ -194,7 +192,6 @@ class Cp2kGridMatrix:
             return self._wfn
         # Storage container
         self._wfn = np.empty(((self.norbs_tip+1)**2,)+self.grid_dim)
-
         # Create interpolator
         interp = Interpolator(self.reg_grid, self.wfn_matrix[ispin][iene])
         self._wfn[0] = interp(*self.grids[igrid])
