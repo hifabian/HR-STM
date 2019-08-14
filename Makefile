@@ -19,11 +19,11 @@ RUN=mpirun -np 2 python3 -m mpi4py run.py
 
 TOAT_ARGS= $(RUN) \
 	--cp2k_input_file $(SAMPLE)/TOAT/sample.inp \
-	--basis_set_file $(SAMPLE)/BASIS_MOLOPT \
+	--basis_set_file $(SAMPLE)/BASIS_SET \
 	--xyz_file $(SAMPLE)/TOAT/sample.xyz \
 	--wfn_file $(SAMPLE)/TOAT/SAMPLE-RESTART.wfn \
-	--dx_wfn 0.2 \
-	--orbs_tip 1 \
+	--dx_wfn 0.1 \
+	--orbs_tip 0 \
 	--fwhm_tip 0.01 \
 	--voltages -1.0 -0.8 -0.6 -0.4 -0.2 0.0 0.2 0.4 0.6 0.8 1.0 \
 	--hartree_file $(SAMPLE)/TOAT/SAMPLE-HART-v_hartree-1_0.cube
