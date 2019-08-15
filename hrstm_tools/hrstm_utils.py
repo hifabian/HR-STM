@@ -63,7 +63,7 @@ def read_tip_positions(files, shift, dx, mpi_rank=0, mpi_size=1, mpi_comm=None):
         pos_all.insert(0, np.mgrid[ \
             lVec[0,0]:lVec[0,0]+lVec[1,0]:dim_pos[0]*1j, \
             lVec[0,1]:lVec[0,1]+lVec[2,1]:dim_pos[1]*1j, \
-            lVec[0,2]-shift:lVec[0,2]+lVec[3,2]-shift:dim_pos[2]*1j])
+            lVec[0,2]+shift:lVec[0,2]+lVec[3,2]+shift:dim_pos[2]*1j])
         # Evaluation region for sample (x,y periodic)
         xmin = lVec[0,0]
         xmax = lVec[0,0]+lVec[1,0]
