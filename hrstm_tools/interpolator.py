@@ -27,10 +27,8 @@ class Interpolator:
         self.dy = x[1][1]-x[1][0]
         self.dz = x[2][1]-x[2][0]
         # For derivative
-        self.derF = [
-            np.gradient(self.f,self.dx,edge_order=2,axis=0),
-            np.gradient(self.f,self.dy,edge_order=2,axis=1),
-            np.gradient(self.f,self.dz,edge_order=2,axis=2)]
+        self.derF = np.gradient(self.f,self.dx,self.dy,self.dz,
+            edge_order=2,axis=(0,1,2))
 
     ### ------------------------------------------------------------------------
     ### Evaluation functions
