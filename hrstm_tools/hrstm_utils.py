@@ -10,8 +10,8 @@ def read_PPPos(filename):
     Loads the positions obtained from the probe particle model.
     The units are in Angstrom.
 
-    @return dispos List of positions in shape of mgrid.
-            lvec   Matrix containing information on the unrelaxed grid.
+    return dispos List of positions in shape of mgrid.
+           lvec   Matrix containing information on the unrelaxed grid.
     """
     disposX = np.transpose(np.load(filename+"_x.npy")).copy()
     disposY = np.transpose(np.load(filename+"_y.npy")).copy()
@@ -28,7 +28,7 @@ def apply_bounds(grid, lVec):
     """
     Restrict grids to box in x- and y-direction.
 
-    @return grid Grid with position restricted to periodic box.
+    return grid Grid with position restricted to periodic box.
     """
     dx = lVec[1,0]-lVec[0,0]
     grid[0][grid[0] >= lVec[1,0]] -= dx
@@ -46,10 +46,10 @@ def read_tip_positions(files, shift, dx, mpi_rank=0, mpi_size=1, mpi_comm=None):
     Reads tip positions and determines grid orbital evaluation region for sample
     wavefunction (determined using tip positions).
 
-    @return pos_local       List with the tip positions for this rank.
-            dim_pos         Dimension of all tip positions together.
-            eval_region_wfn Region encompassing all tip positions.
-            lVec            4x3 matrix defining non-relaxed tip positions 
+    return pos_local       List with the tip positions for this rank.
+           dim_pos         Dimension of all tip positions together.
+           eval_region_wfn Region encompassing all tip positions.
+           lVec            4x3 matrix defining non-relaxed tip positions 
                             (with respect to the oxygen).
     """
     # Only reading on one rank, could be optimized but not the bottleneck
@@ -105,10 +105,10 @@ def create_tip_positions(eval_region, dx, mpi_rank=0, mpi_size=1, mpi_comm=None)
     Creates uniform grids for tip positions. Due to the structure of the code,
     this returns a tuple with twice the same grid. Rotations are not supported.
 
-    @return pos_local       List with the tip positions for this rank.
-            dim_pos         Dimension of all tip positions together.
-            eval_region     Region encompassing all tip positions.
-            lVec            4x3 matrix defining non-relaxed tip positions 
+    return pos_local       List with the tip positions for this rank.
+           dim_pos         Dimension of all tip positions together.
+           eval_region     Region encompassing all tip positions.
+           lVec            4x3 matrix defining non-relaxed tip positions 
                             (with respect to the oxygen).
     """
     eval_region = np.reshape(eval_region,(3,2))

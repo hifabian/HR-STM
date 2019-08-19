@@ -35,9 +35,9 @@ def read_PDOS(filename, eMin=0.0, eMax=0.0):
     coefficients. The eigenvalues are shifted such that the Fermi energy 
     is at 0 and scaled such that the units are in eV.
 
-    @return pdos A list containing matrices. Rows correspond to eigenvalues
-                 while columns to orbitals.
-            eigs A list containing arrays for eigenvalues per spin.
+    return pdos A list containing matrices. Rows correspond to eigenvalues
+                while columns to orbitals.
+           eigs A list containing arrays for eigenvalues per spin.
     """
     with open(filename) as f:
         lines = list(line for line in (l.strip() for l in f) if line)

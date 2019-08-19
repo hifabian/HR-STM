@@ -22,8 +22,8 @@ TOAT_ARGS= $(RUN) \
 	--basis_set_file $(SAMPLE)/BASIS_SET \
 	--xyz_file $(SAMPLE)/TOAT/sample.xyz \
 	--wfn_file $(SAMPLE)/TOAT/SAMPLE-RESTART.wfn \
-	--dx_wfn 0.1 \
-	--orbs_tip 0 \
+	--dx_wfn 0.2 \
+	--orbs_tip 1 \
 	--fwhm_tip 0.01 \
 	--voltages -1.0 -0.8 -0.6 -0.4 -0.2 0.0 0.2 0.4 0.6 0.8 1.0 \
 	--hartree_file $(SAMPLE)/TOAT/SAMPLE-HART-v_hartree-1_0.cube
@@ -34,7 +34,7 @@ TOAT_ARGS= $(RUN) \
 PDOS_RELAXED= \
 	--pdos_list $(TIP)/blunt/aiida-PDOS-list2-1.pdos \
 				$(TIP)/blunt/aiida-PDOS-list1-1.pdos \
-	--tip_shift -3.0 \
+	--tip_shift 3.0 \
 	--tip_pos_files $(SAMPLE)/TOAT/Qo-0.12Qc0.07K0.11/PPpos \
 			  $(SAMPLE)/TOAT/Qo-0.12Qc0.07K0.11/PPdisp 
 PDOS_UNIFORM= \
@@ -44,11 +44,11 @@ PDOS_UNIFORM= \
 	--eval_region 0.0 15.0 0.0 15.0 11.5 14.0
 
 PARA_RELAXED= \
-	--pdos_list 0.1 0.5 0.0 0.5 \
-	--tip_shift -3.0 \
+	--pdos_list 0.15 0.5 0.0 0.5 \
+	--tip_shift 3.0 \
 	--tip_pos_files $(SAMPLE)/TOAT/Qo-0.12Qc0.07K0.11/PPdisp
 PARA_UNIFORM= \
-	--pdos_list 0.1 0.5 0.0 0.5 \
+	--pdos_list 0.15 0.5 0.0 0.5 \
 	--dx_tip 0.1 \
 	--eval_region 0.0 15.0 0.0 15.0 11.5 14.0
 
