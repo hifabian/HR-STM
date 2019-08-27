@@ -199,8 +199,8 @@ class Cp2kGridMatrix:
         interp = Interpolator(self.reg_grid, self.wfn_matrix[ispin][iene])
         self._wfn[0] = interp(*self.grids[igrid])
         if self.norbs_tip:
-            self._wfn[1] = interp.gradient(*self.grids[igrid],2) / ang2bohr
-            self._wfn[2] = interp.gradient(*self.grids[igrid],3) / ang2bohr
-            self._wfn[3] = interp.gradient(*self.grids[igrid],1) / ang2bohr
+            self._wfn[1] = interp.gradient(*self.grids[igrid],2) / ang2bohr / (10*ev2hartree)**0.5
+            self._wfn[2] = interp.gradient(*self.grids[igrid],3) / ang2bohr / (10*ev2hartree)**0.5
+            self._wfn[3] = interp.gradient(*self.grids[igrid],1) / ang2bohr / (10*ev2hartree)**0.5
         self._cgrid, self._cspin, self._cene = itupel
         return self._wfn

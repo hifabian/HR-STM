@@ -22,10 +22,11 @@ TOAT_ARGS= $(RUN) \
 	--basis_set_file $(SAMPLE)/BASIS_SET \
 	--xyz_file $(SAMPLE)/TOAT/sample.xyz \
 	--wfn_file $(SAMPLE)/TOAT/SAMPLE-RESTART.wfn \
+	--fwhm_sam 0.05 \
 	--dx_wfn 0.2 \
 	--orbs_tip 1 \
 	--fwhm_tip 0.01 \
-	--voltages -1.0 -0.8 -0.6 -0.4 -0.2 0.0 0.2 0.4 0.6 0.8 1.0 \
+	--voltages -2.0 -1.8 -1.6 -1.4 -1.2 0.0 1.2 1.4 1.6 1.8 2.0 \
 	--hartree_file $(SAMPLE)/TOAT/SAMPLE-HART-v_hartree-1_0.cube
 
 # ==============================================================================
@@ -45,7 +46,7 @@ PDOS_UNIFORM= \
 
 PARA_RELAXED= \
 	--pdos_list 0.15 0.5 0.0 0.5 \
-	--tip_shift 3.0 \
+	--tip_shift -3.0 \
 	--tip_pos_files $(SAMPLE)/TOAT/Qo-0.12Qc0.07K0.11/PPdisp
 PARA_UNIFORM= \
 	--pdos_list 0.15 0.5 0.0 0.5 \

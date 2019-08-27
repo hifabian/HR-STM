@@ -2,3 +2,6 @@
 	path = ProbeParticleModel
 	url = https://github.com/ProkopHapala/ProbeParticleModel.git
   branch = complex_tip
+[submodule "atomistic_tools"]
+	path = atomistic_tools
+	url = https://github.com/eimrek/atomistic_tools.git

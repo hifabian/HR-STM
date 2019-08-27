@@ -1,3 +1,0 @@
-"""Atomistic simulation tools (AST)
-
-"""

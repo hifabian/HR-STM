@@ -20,16 +20,16 @@ ang2bohr   = 1.88972612546
 ev2hartree = 0.03674930814
 
 # Own includes
-import atomistic_tools.cp2k_stm_sts as css
-from atomistic_tools import common
-from atomistic_tools.cube import Cube
+import atomistic_tools.atomistic_tools.cp2k_stm_sts as css
+from atomistic_tools.atomistic_tools import common
+from atomistic_tools.atomistic_tools.cube import Cube
 
 import hrstm_tools.tip_coeffs as tc
 import hrstm_tools.cp2k_grid_matrix as cgm
 import hrstm_tools.hrstm_utils as hu
 import hrstm_tools.hrstm as hs
 
-import atomistic_tools.cp2k_grid_orbitals as cgo
+import atomistic_tools.atomistic_tools.cp2k_grid_orbitals as cgo
 import hrstm_tools.ppstm_grid_orbitals as pgo
 
 from mpi4py import MPI
@@ -244,10 +244,10 @@ print("Reading tip coefficients in {} seconds for rank {}.".format(end-start,
 ### ----------------------------------------------------------------------------
 
 start = time.time()
-wfn_grid_orb = pgo.PPSTMGridOrbitals(mpi_rank, mpi_size, mpi_comm,
-    single_precision=False)
-#wfn_grid_orb = cgo.Cp2kGridOrbitals(mpi_rank, mpi_size, mpi_comm,
+#wfn_grid_orb = pgo.PPSTMGridOrbitals(mpi_rank, mpi_size, mpi_comm,
 #    single_precision=False)
+wfn_grid_orb = cgo.Cp2kGridOrbitals(mpi_rank, mpi_size, mpi_comm,
+    single_precision=False)
 wfn_grid_orb.read_cp2k_input(args.cp2k_input_file)
 wfn_grid_orb.read_xyz(args.xyz_file)
 wfn_grid_orb.read_basis_functions(args.basis_set_file)
@@ -255,8 +255,8 @@ wfn_grid_orb.load_restart_wfn_file(args.wfn_file,
     emin=args.emin-4.0*args.fwhm_sam, emax=args.emax+4.0*args.fwhm_sam)
 wfn_grid_orb.calc_morbs_in_region(args.dx_wfn,
     z_eval_region=eval_region_wfn[2]*ang2bohr,
-#    reserve_extrap = args.extrap_dist,
-    reserve_extrap = 5.0,
+    reserve_extrap = args.extrap_dist,
+#    reserve_extrap = 5.0,
     eval_cutoff = args.rcut*ang2bohr)
 end = time.time()
 print("Building CP2K wave function matrix in {} seconds for rank {}.".format(
@@ -300,7 +300,8 @@ print("Setting up wave function object in {} seconds for rank {}."
 if mpi_rank == 0:
     meta = {'dimGrid' : dim_pos,
             'lVec' : lVec,
-            'voltages' : args.voltages,}
+            'voltages' : args.voltages,
+            'input' : args}
     np.save(args.output+"_meta.npy", meta)
 start = time.time()
 hrstm = hs.Hrstm(tip_coeffs, dim_pos, wfn_grid_matrix, args.fwhm_sam,
