@@ -13,11 +13,8 @@ class Interpolator:
     First derivatives are achieved using second order finite differences to not
     stump the convergence rate.
 
-    @attention No care is taken for periodicity or out of bound: Make sure all
-               points to be interpolated are within the regular grid!
-
-    @note This class does not rely on scipy.interpolate because it is slightly
-          slower.
+    Pay attention: No care is taken for periodicity or out of bound: Make sure 
+                   all points to be interpolated are within the regular grid!
     """
 
     def __init__(self, x, f):
@@ -58,10 +55,11 @@ class Interpolator:
 
     def gradient(self, x, y, z, direct):
         """
-        Evaluates gradient of interpolation in specified direciton.
+        Evaluates gradient of interpolation in specified direction 
+        (x=1,y=2,z=3).
 
-        @param x, y, z Position.
-        @param direct  Direction of gradient (x=1,y=2,z=3).
+        Pay attention if units used for grid differ from units for 
+        function!
         """
         try:
             tmp = self.derF[direct-1]

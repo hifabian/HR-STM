@@ -9,12 +9,11 @@ ang2bohr   = 1.88972612546
 ev2hartree = 0.03674930814
 
 
-
 class Cp2kGridMatrix:
     """
     Class that provides a wrapper for Cp2kGridOrbtials such that they can be
-    evaluated on an arbitrary grid using interpolation. Derivatives are also
-    made accessible.
+    evaluated on an arbitrary grid using interpolation. Scaled derivatives are 
+    also accessible.
 
     This structure provides access to the wave functions via bracket operators.
     The following structure is provided: [itunnel,ispin,iene][derivative,x,y,z].
@@ -45,35 +44,43 @@ class Cp2kGridMatrix:
 
     def _get_slice(cls, wm, ids, axis):
         """
-        Cuts a semi-periodic function defined on a grid according to the 
-        indices along the specified axis. The indices are contiguous and
-        represent by a tuple (imin, imax) (inclusive).
+        Retrieves a slice specified by a tuple (imin, imax) (inclusive)
+        from an assumed-periodic array. The slice is along the specified
+        axis.
         """
-        axis += 1
         dim = np.shape(wm)[axis]
-        slice0 = [slice(None)]*wm.ndim
-        slice1 = [slice(None)]*wm.ndim
+        slice_lower = [slice(None)]*wm.ndim
+        slice_upper = [slice(None)]*wm.ndim
         if ids[0] < 0:
-            slice0[axis] = slice(ids[0],None)
+            slice_lower[axis] = slice(ids[0],None)
             if ids[1] >= dim:
-                slice1[axis] = slice(None,ids[1]-dim+1)
-                return np.concatenate([wm[tuple(slice0)],wm,wm[tuple(slice1)]], axis=axis)
+                slice_upper[axis] = slice(None,ids[1]-dim+1)
+                # Case: Spill-over on both sides.
+                return np.concatenate([wm[tuple(slice_lower)],wm,
+                    wm[tuple(slice_upper)]], axis=axis)
             else:
-                slice1[axis] = slice(None,ids[1]+1)
-                return np.concatenate([wm[tuple(slice0)],wm[tuple(slice1)]], axis=axis)
+                slice_upper[axis] = slice(None,ids[1]+1)
+                # Case: Spill-over only on lower side.
+                return np.concatenate([wm[tuple(slice_lower)],
+                    wm[tuple(slice_upper)]], axis=axis)
         elif ids[1] >= dim:
-            slice0[axis] = slice(ids[0],None)
-            slice1[axis] = slice(None, ids[1]-dim+1)
-            return np.concatenate([wm[tuple(slice0)],wm[tuple(slice1)]], axis=axis)
+            slice_lower[axis] = slice(ids[0],None)
+            slice_upper[axis] = slice(None, ids[1]-dim+1)
+            # Case: Spill-over only on upper side.
+            return np.concatenate([wm[tuple(slice_lower)],
+                wm[tuple(slice_upper)]], axis=axis)
         else:
-            slice0[axis] = slice(ids[0],ids[1]+1)
-            return wm[tuple(slice0)]
+            slice_lower[axis] = slice(ids[0],ids[1]+1)
+            # Case: No spill-over
+            return wm[tuple(slice_lower)]
 
     def divide(self):
         """
-        Divides grid orbitals properly to the different MPI ranks.
-        Note that this needs to be called for MPI implementations and
-        must not be called twice.
+        Divides the grid obritals to the different MPI ranks along the
+        x-direction rather than the energies.
+
+        Note that this function overwrites the stored wave function matrix
+        and must be called.
         """
         if self._divide_flag:
             raise AssertionError("Tried to call Cp2kGridMatrix.divide() twice!")
@@ -92,7 +99,7 @@ class Cp2kGridMatrix:
                             for pos in self.grids]) / self._dv[1]),
               ], dtype=int)
         if self.mpi_comm is None:
-            wfn_matrix = [self._get_slice(self.wfn_matrix[ispin],isx,0) for ispin in \
+            wfn_matrix = [self._get_slice(self.wfn_matrix[ispin],isx,1) for ispin in \
                 range(self.nspin)]
         else:
             ene = []
@@ -115,7 +122,7 @@ class Cp2kGridMatrix:
                     else:
                         recvbuf = None
                     sendbuf = np.array(self._get_slice(self.wfn_matrix[ispin],
-                        isx_all[rank],0),order='C').ravel()
+                        isx_all[rank],1),order='C').ravel()
                     self.mpi_comm.Gatherv(sendbuf=sendbuf, recvbuf=[recvbuf,
                         nene_by_rank*npoints], root=rank)
                     if self.mpi_rank == rank:
@@ -124,7 +131,7 @@ class Cp2kGridMatrix:
             self._ene = ene
         self._wfn_matrix = []
         for ispin in range(self.nspin):
-            self._wfn_matrix.append(self._get_slice(wfn_matrix[ispin],isy,1))
+            self._wfn_matrix.append(self._get_slice(wfn_matrix[ispin],isy,2))
         # Set evaluation region for this MPI rank
         self._eval_region_local[0] = self.eval_region[0][0]+isx*self._dv[0]
         self._eval_region_local[1] = self.eval_region[1][0]+isy*self._dv[1]
@@ -147,23 +154,29 @@ class Cp2kGridMatrix:
         return self._ene
     @property
     def wfn_matrix(self):
-        """ Underlying matrix defined on a regular grid in atomic units. """
+        """ Local underlying matrix defined on regular grid in atomic units. """
         return self._wfn_matrix
     @property
     def eval_region_local(self):
-        """ Evaluation grid of local wave funtion matrix in Angstrom. """
+        """ Limits of evaluation grid for local non-relaxed tip scan in
+            Angstrom. 
+        """
         return self._eval_region_local
     @property
     def eval_region(self):
-        """ Evaluation grid of complete wave function matrix in Angstrom. """
+        """ Limits of evaluation grid for complete non-relaxed tip scan in 
+            Angstrom. 
+        """
         return self._eval_region
     @property
     def reg_grid(self):
-        """ Regular grid where wave function matrix is defined on in Angstrom. """
+        """ Regular grid where local wave function matrix is defined on in 
+            Angstrom. 
+        """
         return self._reg_grid
     @property
     def grids(self):
-        """ Evaluation grids in Angstrom. """
+        """ Local evaluation grids for tip positions in Angstrom. """
         return self._grids
     @property
     def ase_atoms(self):
@@ -171,15 +184,15 @@ class Cp2kGridMatrix:
         return self._ase_atoms
     @property
     def wfn_dim(self):
-        """ Dimension of grid for wave function matrix. """
+        """ Dimension of local grid for wave function matrix. """
         return self._wfn_dim
     @property
     def grid_dim(self):
-        """ Dimension of evaluation grids. """
+        """ Dimension of local evaluation grids for tip positions. """
         return np.shape(self._grids[0])[1:]
     @property
     def norbs_tip(self):
-        """ Number of tip orbitals. """
+        """ Number of tip orbitals (0 for s, 1 for p). """
         return self._norbs_tip
     @property
     def decay(self):

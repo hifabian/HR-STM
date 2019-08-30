@@ -7,50 +7,42 @@ from mpi4py import MPI
 
 def read_PPPos(filename):
     """
-    Loads the positions obtained from the probe particle model.
+    Loads the positions obtained from the probe particle model and returns
+    them as a [3,X,Y,Z]-array together with the lVec (which defines the 
+    non-relaxed grid scan in terms of the lowest probe particle (oxygen)).
     The units are in Angstrom.
-
-    return dispos List of positions in shape of mgrid.
-           lvec   Matrix containing information on the unrelaxed grid.
     """
     disposX = np.transpose(np.load(filename+"_x.npy")).copy()
     disposY = np.transpose(np.load(filename+"_y.npy")).copy()
     disposZ = np.transpose(np.load(filename+"_z.npy")).copy()
-    # Information on the grid
     lvec = (np.load(filename+"_vec.npy"))
     # Stack arrays to form 4-dimensional array of size [3, noX, noY, noZ]
     dispos = (disposX,disposY,disposZ)
-
     return dispos, lvec
-
 
 def apply_bounds(grid, lVec):
     """
-    Restrict grids to box in x- and y-direction.
-
-    return grid Grid with position restricted to periodic box.
+    Assumes periodicity and restricts grid positions to a box in x- and
+    y-direction.
     """
     dx = lVec[1,0]-lVec[0,0]
     grid[0][grid[0] >= lVec[1,0]] -= dx
     grid[0][grid[0] < lVec[0,0]]  += dx
-
     dy = lVec[2,1]-lVec[0,1]
     grid[1][grid[1] >= lVec[2,1]] -= dy
     grid[1][grid[1] < lVec[0,1]]  += dy
-
     return grid
-
 
 def read_tip_positions(files, shift, dx, mpi_rank=0, mpi_size=1, mpi_comm=None):
     """
-    Reads tip positions and determines grid orbital evaluation region for sample
-    wavefunction (determined using tip positions).
+    Reads the tip positions and determines the necessary grid orbital evaluation
+    region for the sample via the tip positions.
 
-    return pos_local       List with the tip positions for this rank.
-           dim_pos         Dimension of all tip positions together.
-           eval_region_wfn Region encompassing all tip positions.
-           lVec            4x3 matrix defining non-relaxed tip positions 
-                            (with respect to the oxygen).
+    pos_local       List with the tip positions for this rank.
+    dim_pos         Number of all tip positions along each axis.
+    eval_region     Limits of evaluation grid encompassing all tip positions.
+    lVec            4x3 matrix defining non-relaxed tip positions 
+                    (with respect to the oxygen).
     """
     # Only reading on one rank, could be optimized but not the bottleneck
     if mpi_rank == 0:
@@ -99,17 +91,16 @@ def read_tip_positions(files, shift, dx, mpi_rank=0, mpi_size=1, mpi_comm=None):
                 MPI.DOUBLE], pos_local[gridIdx][axis], root=0)
     return pos_local, dim_pos, eval_region_wfn, lVec
 
-
 def create_tip_positions(eval_region, dx, mpi_rank=0, mpi_size=1, mpi_comm=None):
     """
     Creates uniform grids for tip positions. Due to the structure of the code,
     this returns a tuple with twice the same grid. Rotations are not supported.
 
-    return pos_local       List with the tip positions for this rank.
-           dim_pos         Dimension of all tip positions together.
-           eval_region     Region encompassing all tip positions.
-           lVec            4x3 matrix defining non-relaxed tip positions 
-                            (with respect to the oxygen).
+    pos_local       List with the tip positions for this rank.
+    dim_pos         Number of all tip positions along each axis.
+    eval_region     Limits of evaluation grid encompassing all tip positions.
+    lVec            4x3 matrix defining non-relaxed tip positions 
+                    (with respect to the oxygen).
     """
     eval_region = np.reshape(eval_region,(3,2))
     lVec = np.zeros((4,3))

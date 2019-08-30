@@ -1,6 +1,6 @@
-"""
-Tools to put CP2K orbitals on a real space grid
-""" 
+# @author Hillebrand, Fabian
+# @date   2019
+
 
 import os
 import numpy as np
@@ -31,6 +31,12 @@ hart_2_ev = 27.21138602
 
 
 class PPSTMGridOrbitals(Cp2kGridOrbitals):
+    """
+    Replaces Gaussian with an exponential depending on the decay constant.
+    This exists primarily to debug and should not be used (or with great care).
+    A particular nasty thing is that the extrapolation plane is used as the work
+    function (in eV).
+    """
 
     ### ---------------------------------------------------------------------------
     ### Methods directly related to putting stuff on grids

@@ -8,10 +8,13 @@ import time
 
 class Hrstm:
     """
-    Provides a relatively genericc HR-STM simulator.
+    Provides a relatively generic HR-STM simulator.
 
     Needs to be given an object for the wave function and the tip coefficients
     that provide certain information.
+    The tip DOS can be energy-independent (i.e. "constant") or energy-dependent
+    in which case it can be either broadened using Gaussians or left as Dirac
+    functions depending on what the full-width at half maximum is set as.
 
     This class supports parallelism. However, the grids should be divided along
     x-axis only.
@@ -153,7 +156,7 @@ class Hrstm:
         The file is written as a 1-dimensional array similar to write().
         Furthermore, in order to load the current use np.load()['arr_0'].
 
-        @attention This method invokes a gather!
+        Pay attention: This method invokes a gather!
         """
         current = self.gather()
         if self.mpi_rank == 0:
@@ -168,14 +171,13 @@ class Hrstm:
     ### Running HR-STM
     ### ------------------------------------------------------------------------
 
-    def run(self, voltages):
+    def run(self, voltages, info=True):
         """ Performs the HR-STM simulation. """
         self._voltages = np.array(voltages)
-        # Currents for all bias voltages
         self.local_current = np.zeros((len(self._voltages),)+self._tc.grid_dim)
-        # Over each separate tunnel process (e.g. to O- or C-atom)
         totTM = 0.0
         totVL = 0.0
+        # Over each separate tunnel process (e.g. to O- or C-atom)
         for itunnel in range(self._tc.ntunnels):
             for ispin_sam in range(self._gm.nspin):
                 for iene_sam, ene_sam in enumerate(self._gm.ene[ispin_sam]):
@@ -201,5 +203,6 @@ class Hrstm:
                             totVL += end-start
         # Copy to assure C-contiguous array
         self.local_current = self.local_current.transpose((1,2,3,0)).copy()
-        print("Total time for tunneling matrix was {:} seconds.".format(totTM))
-        print("Total time for voltage loop was {:} seconds.".format(totVL))
+        if info:
+            print("Total time for tunneling matrix was {:} seconds.".format(totTM))
+            print("Total time for voltage loop was {:} seconds.".format(totVL))

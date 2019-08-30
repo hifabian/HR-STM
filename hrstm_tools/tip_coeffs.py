@@ -11,9 +11,7 @@ hartreeToEV = 27.21138602
 def const_coeffs(s=0.0, py=0.0, pz=0.0, px=0.0):
     """
     Creates coefficients for seperated tunnelling to each orbital.
-
-    return coeffs List of coefficients per spin.
-           ene    List of a dummy eigenvalues per spin set to 0.
+    The energies are set to zero.
     """
     cc = np.array([s, py, pz, px]) != 0.0
     coeffs = np.empty((sum(cc),4),)
@@ -28,16 +26,17 @@ def const_coeffs(s=0.0, py=0.0, pz=0.0, px=0.0):
          coeffs[sum(cc[:4])-1] = [0.0, 0.0, 0.0, px**0.5]
     return [coeffs], [ene]
 
-
 def read_PDOS(filename, eMin=0.0, eMax=0.0):
     """
-    Reads coefficients from *.pdos file and uses these to construct beta 
+    Reads coefficients from *.pdos file and uses these to construct tip 
     coefficients. The eigenvalues are shifted such that the Fermi energy 
     is at 0 and scaled such that the units are in eV.
 
-    return pdos A list containing matrices. Rows correspond to eigenvalues
-                while columns to orbitals.
-           eigs A list containing arrays for eigenvalues per spin.
+    Note: This function does currently not support spin (for the tip).
+
+    pdos A list containing matrices. Rows correspond to eigenvalues
+         while columns to orbitals.
+    eigs A list containing arrays for eigenvalues per spin.
     """
     with open(filename) as f:
         lines = list(line for line in (l.strip() for l in f) if line)
@@ -76,9 +75,7 @@ def read_PDOS(filename, eMin=0.0, eMax=0.0):
             - homoEnergies[spinIdx] for spinIdx in range(noSpins)]
         pdos = [pdos[spinIdx][startIdx[spinIdx]:endIdx[spinIdx],:] \
             for spinIdx in range(noSpins)]
-
     return pdos, eigs
-
 
 class TipCoefficients:
     """
@@ -98,7 +95,6 @@ class TipCoefficients:
         self.mpi_rank = mpi_rank
         self.mpi_size = mpi_size
         self.mpi_comm = mpi_comm
-
 
     ### ------------------------------------------------------------------------
     ### Read function for coefficients
@@ -147,7 +143,6 @@ class TipCoefficients:
             self._singles = self.mpi_comm.bcast(self._singles, root=0)
             self._ene = self.mpi_comm.bcast(self._ene, root=0)
             self._type = self.mpi_comm.bcast(self._type, root=0)
-
 
     ### ------------------------------------------------------------------------
     ### Initialize coefficients
@@ -229,7 +224,6 @@ class TipCoefficients:
         end = time.time()
         print("Rotational matrices took {} seconds".format(end-start))
 
-
     ### ------------------------------------------------------------------------
     ### Access operators
     ### ------------------------------------------------------------------------
@@ -264,7 +258,7 @@ class TipCoefficients:
         return self._ntunnels
 
     def __getitem__(self, ituple):
-        """ @param ituple Index tuple (itunnel,ispin,iene) """
+        """ Takes an index tuple (itunnel,ispin,iene). """
         # Unpack indices
         itunnel, ispin, iene = ituple
         if self._coeffs is not None \
