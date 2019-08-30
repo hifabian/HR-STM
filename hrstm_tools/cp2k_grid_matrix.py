@@ -21,12 +21,13 @@ class Cp2kGridMatrix:
     Note that this evaluation may be performed lazily.
     """
 
-    def __init__(self, cp2k_grid_orb, eval_region, tip_pos, norbs_tip, 
+    def __init__(self, cp2k_grid_orb, eval_region, tip_pos, norbs_tip, wn,
         mpi_rank=0, mpi_size=1, mpi_comm=None):
         self.mpi_rank = mpi_rank
         self.mpi_size = mpi_size
         self.mpi_comm = mpi_comm
         self._norbs_tip = norbs_tip
+        self._decay = (2*wn*ev2hartree)**0.5
         self._grids = tip_pos
         # Complete energy and wave function matrix when using no MPI
         self._ene = cp2k_grid_orb.morb_energies
@@ -142,27 +143,27 @@ class Cp2kGridMatrix:
 
     @property
     def ene(self):
-        """ List of energies per spin. """
+        """ List of energies per spin in eV. """
         return self._ene
     @property
     def wfn_matrix(self):
-        """ Underlying matrix defined on a regular grid. """
+        """ Underlying matrix defined on a regular grid in atomic units. """
         return self._wfn_matrix
     @property
     def eval_region_local(self):
-        """ Evaluation grid of local wave funtion matrix. """
+        """ Evaluation grid of local wave funtion matrix in Angstrom. """
         return self._eval_region_local
     @property
     def eval_region(self):
-        """ Evaluation grid of complete wave function matrix. """
+        """ Evaluation grid of complete wave function matrix in Angstrom. """
         return self._eval_region
     @property
     def reg_grid(self):
-        """ Regular grid where wave function matrix is defined on. """
+        """ Regular grid where wave function matrix is defined on in Angstrom. """
         return self._reg_grid
     @property
     def grids(self):
-        """ Evaluation grids. """
+        """ Evaluation grids in Angstrom. """
         return self._grids
     @property
     def ase_atoms(self):
@@ -180,6 +181,10 @@ class Cp2kGridMatrix:
     def norbs_tip(self):
         """ Number of tip orbitals. """
         return self._norbs_tip
+    @property
+    def decay(self):
+        """ Decay constant in atomic units. """
+        return self._decay
     @property
     def nspin(self):
         """ Number of spins for sample. """
@@ -199,8 +204,8 @@ class Cp2kGridMatrix:
         interp = Interpolator(self.reg_grid, self.wfn_matrix[ispin][iene])
         self._wfn[0] = interp(*self.grids[igrid])
         if self.norbs_tip:
-            self._wfn[1] = interp.gradient(*self.grids[igrid],2) / ang2bohr / (10*ev2hartree)**0.5
-            self._wfn[2] = interp.gradient(*self.grids[igrid],3) / ang2bohr / (10*ev2hartree)**0.5
-            self._wfn[3] = interp.gradient(*self.grids[igrid],1) / ang2bohr / (10*ev2hartree)**0.5
+            self._wfn[1] = interp.gradient(*self.grids[igrid],2) / ang2bohr / self.decay
+            self._wfn[2] = interp.gradient(*self.grids[igrid],3) / ang2bohr / self.decay
+            self._wfn[3] = interp.gradient(*self.grids[igrid],1) / ang2bohr / self.decay
         self._cgrid, self._cspin, self._cene = itupel
         return self._wfn

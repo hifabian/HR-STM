@@ -85,6 +85,13 @@ parser.add_argument('--fwhm_sam',
     required=False,
     help="Full width at half maximum for Gaussian broadening of DoS for sample.")
 
+parser.add_argument('--wn',
+    type=float,
+    metavar='eV',
+    default=5.0,
+    required=False,
+    help="Work function for the sample. Used for the decay constant.")
+
 ### ----------------------------------------------------------------------------
 ### Energy range for sample
 parser.add_argument('--emin',
@@ -285,7 +292,7 @@ print("Extrapolating CP2K wave function matrix in {} seconds for rank {}."
 
 start = time.time()
 wfn_grid_matrix = cgm.Cp2kGridMatrix(wfn_grid_orb, eval_region_wfn, 
-    pos_local[1:], args.orbs_tip, mpi_rank, mpi_size, mpi_comm)
+    pos_local[1:], args.orbs_tip, args.wn, mpi_rank, mpi_size, mpi_comm)
 del wfn_grid_orb, pos_local
 wfn_grid_matrix.divide()
 end = time.time()
