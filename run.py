@@ -83,7 +83,7 @@ parser.add_argument('--fwhm_sam',
     metavar='eV',
     default=0.05,
     required=False,
-    help="Full width at half maximum for Gaussian broadening of DoS for sample.")
+    help="Full width at half maximum for Gaussian broadening of DOS for sample.")
 
 parser.add_argument('--wn',
     type=float,
@@ -165,7 +165,7 @@ parser.add_argument('--pdos_list',
     required=True,
     help="List of PDOS files for the different tip apexes used as tip"
     + " coefficients. Or, alternatively, four numbers corresponding to"
-    + " [s py pz px] for uniform PDOS values (constant DoS).")
+    + " [s py pz px] for uniform PDOS values (constant DOS).")
 
 parser.add_argument('--orbs_tip',
     type=int,
@@ -179,7 +179,7 @@ parser.add_argument('--fwhm_tip',
     type=float,
     metavar='eV',
     required=False,
-    help="Full width at half maximum for Gaussian broadening of DoS for tip.")
+    help="Full width at half maximum for Gaussian broadening of DOS for tip.")
 
 parser.add_argument('--rotate',
     action="store_true",
@@ -262,8 +262,8 @@ wfn_grid_orb.load_restart_wfn_file(args.wfn_file,
     emin=args.emin-4.0*args.fwhm_sam, emax=args.emax+4.0*args.fwhm_sam)
 wfn_grid_orb.calc_morbs_in_region(args.dx_wfn,
     z_eval_region=eval_region_wfn[2]*ang2bohr,
-    reserve_extrap = args.extrap_dist,
 #    reserve_extrap = 5.0,
+    reserve_extrap = args.extrap_dist,
     eval_cutoff = args.rcut*ang2bohr)
 end = time.time()
 print("Building CP2K wave function matrix in {} seconds for rank {}.".format(
