@@ -1,9 +1,3 @@
-# About this Branch
-
-Currently work in progress. Other branch uses approximate basis whereas this 
-branch aims at using the CP2K wave function + extrapolation for region far
-away from surface.
-
 # HR-STM Simulation
 
 This repository provides an implementation of high-resolution scanning tunnelling 
@@ -23,6 +17,7 @@ python3 run.py -h
 together with a small explanation.
 
 ## References
+
 * J. Bardeen, "Tunnelling from a many-particle point of view", Phys. Rev. Lett. 6 (1961)
 * C. J. Chen, "Tunneling matrix elements in three-dimensional space: The derivative rule 
   and the sum rule", Phys. Rev. B 42 (1990)

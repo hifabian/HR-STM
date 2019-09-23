@@ -2,7 +2,7 @@
 
 # @author  Hillebrand, Fabian
 # @date    2019
-# @version 2.0.0
+# @version 2.1.0
 
 import argparse # Terminal arguments
 import os
@@ -251,10 +251,10 @@ print("Reading tip coefficients in {} seconds for rank {}.".format(end-start,
 ### ----------------------------------------------------------------------------
 
 start = time.time()
-#wfn_grid_orb = pgo.PPSTMGridOrbitals(mpi_rank, mpi_size, mpi_comm,
-#    single_precision=False)
 wfn_grid_orb = cgo.Cp2kGridOrbitals(mpi_rank, mpi_size, mpi_comm,
     single_precision=False)
+#wfn_grid_orb = pgo.PPSTMGridOrbitals(mpi_rank, mpi_size, mpi_comm,
+#    single_precision=False)
 wfn_grid_orb.read_cp2k_input(args.cp2k_input_file)
 wfn_grid_orb.read_xyz(args.xyz_file)
 wfn_grid_orb.read_basis_functions(args.basis_set_file)
@@ -262,7 +262,8 @@ wfn_grid_orb.load_restart_wfn_file(args.wfn_file,
     emin=args.emin-4.0*args.fwhm_sam, emax=args.emax+4.0*args.fwhm_sam)
 wfn_grid_orb.calc_morbs_in_region(args.dx_wfn,
     z_eval_region=eval_region_wfn[2]*ang2bohr,
-#    reserve_extrap = 5.0,
+# Hack for PPSTM: actually used for workfunction
+#    reserve_extrap = args.wn,
     reserve_extrap = args.extrap_dist,
     eval_cutoff = args.rcut*ang2bohr)
 end = time.time()
