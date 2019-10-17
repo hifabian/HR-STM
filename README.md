@@ -1,3 +1,9 @@
+# Important Notice
+
+This repository is out-of-date. Please use [`atomistic_tools`](at).
+
+[at]: https://github.com/eimrek/atomistic_tools
+
 # HR-STM Simulation
 
 This repository provides an implementation of high-resolution scanning tunnelling 
